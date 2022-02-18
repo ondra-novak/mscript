@@ -15,8 +15,9 @@ namespace mscript {
 	struct BlockBld {
 		std::unordered_map<Value, std::intptr_t> constMap;
 		std::vector<std::uint8_t> code;
-		Cmd pushInt(std::intptr_t val, Cmd cmd);
+		void pushInt(std::intptr_t val, Cmd cmd);
 		void pushCmd(Cmd cmd);
+		void setInt2(std::intptr_t val, std::size_t pos);
 		std::intptr_t pushConst(Value v);
 	};
 
@@ -152,6 +153,104 @@ namespace mscript {
 		PNode fn;
 		PParamPackNode paramPack;
 	};
+
+	class DirectCmdNode: public Expression {
+	public:
+		DirectCmdNode(Cmd cmd);
+	protected:
+		Cmd cmd;
+		virtual void generateExpression(BlockBld &blk) const override;
+	};
+
+	class BooleanNode: public DirectCmdNode{
+	public:
+		BooleanNode(bool val): DirectCmdNode(val?Cmd::push_true:Cmd::push_false){}
+	};
+	class NullNode: public DirectCmdNode{
+	public:
+		NullNode(): DirectCmdNode(Cmd::push_null) {}
+	};
+	class UndefinedNode: public DirectCmdNode{
+	public:
+		UndefinedNode(): DirectCmdNode(Cmd::push_undefined) {}
+	};
+
+	class KwExecNode: public Expression {
+	public:
+		KwExecNode(PNode &&nd_block);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		PNode nd_block;
+	};
+
+	class KwWithNode: public Expression {
+	public:
+		KwWithNode(PNode &&nd_object, PNode &&nd_block);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		PNode nd_object;
+		PNode nd_block;
+	};
+
+	class KwExecObjectNode: public KwWithNode {
+	public:
+		using KwWithNode::KwWithNode;
+		virtual void generateExpression(BlockBld &blk) const override;
+	};
+
+	class KwExecNewObjectNode: public KwExecNode {
+	public:
+		using KwExecNode::KwExecNode;
+		virtual void generateExpression(BlockBld &blk) const override;
+	};
+
+	class IfElseNode: public Expression {
+	public:
+		IfElseNode(PNode &&cond, PNode &&nd_then, PNode &&nd_else);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		PNode &&cond;
+		PNode &&nd_then;
+		PNode &&nd_else;
+	};
+
+	class IfOnlyNode: public Expression {
+	public:
+		IfOnlyNode(PNode &&cond, PNode &&nd_then);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		PNode &&cond;
+		PNode &&nd_then;
+	};
+
+	class DerefernceNode: public BinaryOperation {
+	public:
+		DerefernceNode(PNode &&left, PNode &&right);
+	};
+
+	class DerefernceDotNode: public Expression {
+	public:
+		DerefernceDotNode(PNode &&left, Value identifier);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		PNode left;
+		Value identifier;
+	};
+
+	class MethodCallNode: public Expression {
+	public:
+		MethodCallNode(PNode &&left, Value identifier, PParamPackNode &&pp);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		PNode &&left;
+		Value identifier;
+		PParamPackNode &&pp;
+	};
+
+
+	Value defineUserFunction(std::vector<std::string> &&identifiers, PNode &&body, const CodeLocation &loc);
+
+	Block buildCode(const PNode &nd, const CodeLocation &loc);
 
 }
 

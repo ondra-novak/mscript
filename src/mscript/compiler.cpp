@@ -12,27 +12,11 @@ namespace mscript {
 
 
 
-Block compile(const std::vector<Element> &code, VirtualMachine &vm, const std::string &fname, std::size_t line) {
+Block compile(const std::vector<Element> &code, Value globalScope, const CodeLocation &loc) {
 
-	BlockBld bld;
+	PNode tree;
 
-
-//	compile2(code, vm, bld);
-
-	std::vector<Value> consts;
-	consts.resize(bld.constMap.size());
-	for (const auto &itm: bld.constMap) {
-		consts[itm.second] = itm.first;
-	}
-
-	return {
-		consts,
-		bld.code,
-		fname,
-		line
-	};
-
-
+	return buildCode(tree, loc);
 
 }
 
@@ -67,14 +51,45 @@ void Compiler::sync(const Symbol &symbol) {
 
 }
 
-PNode Compiler::handleCallable(PNode expr) {
-	if (next().symbol == Symbol::s_left_bracket) { //it is function
+void Compiler::checkBeginBlock() {
+	auto n = next();
+	if (n.symbol != Symbol::identifier && n.symbol != Symbol::s_left_brace) {
+		throw std::runtime_error(std::string("Expected begin of block, found: ").append(strKeywords[n.symbol]));
+	}
+}
+
+
+PNode Compiler::handleValueSuffixes(PNode expr) {
+	PNode tmp;
+	auto s = next();
+	switch (s.symbol) {
+	case Symbol::s_left_bracket:
 		commit();
-		return std::make_unique<FunctionCall>(std::move(expr), parseParamPack());
-	} else {
+		return handleValueSuffixes(std::make_unique<FunctionCall>(std::move(expr), parseParamPack()));
+	case Symbol::s_left_square_bracket:
+		commit();
+		tmp = parseValue();
+		sync(Symbol::s_right_bracket);
+		return handleValueSuffixes(std::make_unique<DerefernceNode>(std::move(expr), std::move(tmp)));
+	case Symbol::s_dot:
+		commit();
+		s = next();
+		if (s.symbol == Symbol::identifier) {
+			commit();
+			PNode vn = std::make_unique<ValueNode>(s.data);
+			auto t = next();
+			if (t.symbol == Symbol::s_left_bracket) {
+				commit();
+				return handleValueSuffixes(std::make_unique<MethodCallNode>(std::move(expr), s.data, parseParamPack()));
+			} else {
+				return handleValueSuffixes(std::make_unique<DerefernceDotNode>(std::move(expr), s.data));
+			}
+		}
+		throw std::runtime_error("Expected identifier after '.' ");
+		break;
+	default:
 		return expr;
 	}
-
 }
 
 PNode Compiler::parseValue() {
@@ -84,15 +99,143 @@ PNode Compiler::parseValue() {
 	case Symbol::identifier:			//can be value or function call
 		out = std::make_unique<Identifier>(s.data);
 		commit();
-		out = handleCallable(std::move(out));
+		if (next().symbol == Symbol::s_arrow) out = compileDefineFunction(std::move(out));
+		else out = handleValueSuffixes(std::move(out));
 		break;
 	case Symbol::number:
+		commit();
 		out = std::make_unique<NumberNode>(s.data);
+		break;
+	case Symbol::string:
+		commit();
+		out = std::make_unique<ValueNode>(s.data);
+		break;
+	case Symbol::kw_true:
+		commit();
+		out = std::make_unique<BooleanNode>(true);
+		break;
+	case Symbol::kw_false:
+		commit();
+		out = std::make_unique<BooleanNode>(false);
+		break;
+	case Symbol::kw_null:
+		commit();
+		out = std::make_unique<NullNode>();
+		break;
+	case Symbol::kw_undefined:
+		commit();
+		out = std::make_unique<UndefinedNode>();
+		break;
+	case Symbol::kw_exec:
+		commit();
+		checkBeginBlock();
+		out = handleValueSuffixes(std::make_unique<UnaryOperation>(parseValue(), Cmd::exec_block));
+		break;
+	case Symbol::kw_with: {
+			commit();
+			PNode obj = parseValue();
+			checkBeginBlock();
+			PNode blk = parseValue();
+			out = std::make_unique<KwWithNode>(std::move(obj), std::move(blk));
+			out = handleValueSuffixes(std::move(out));
+		}
+		break;
+	case Symbol::kw_object: {
+			commit();
+			PNode x = parseValue();
+			auto n = next();
+			if (n.symbol == Symbol::identifier || n.symbol == Symbol::s_left_brace) {
+				PNode y = parseValue();
+				out = std::make_unique<KwExecObjectNode>(std::move(x), std::move(y));
+			} else {
+				out = std::make_unique<KwExecNewObjectNode>(std::move(x));
+			}
+			out = handleValueSuffixes(std::move(out));
+		}
+		break;
+	case Symbol::kw_if:
+		commit();
+		out = handleValueSuffixes(parseIfElse());
+		break;
+
+	case Symbol::s_left_bracket:
+		commit();
+		out = parseParamPack();
+		if (next().symbol == Symbol::s_arrow) out = compileDefineFunction(std::move(out));
 		break;
 	default:
 		break;
 	}
 	return out;
+}
+
+PNode Compiler::parseIfElse() {
+	PNode cond = parseValue();
+	checkBeginBlock();
+	PNode blk1 = parseValue();
+	if (next().symbol == Symbol::kw_else) {
+		commit();
+		PNode blk2;
+		if (next().symbol == Symbol::kw_if) {
+			commit();
+			blk2 = parseIfElse();
+		} else {
+			checkBeginBlock();
+			blk2 = parseValue();
+		}
+		return std::make_unique<IfElseNode>(std::move(cond), std::move(blk1), std::move(blk2));
+	} else {
+		return std::make_unique<IfOnlyNode>(std::move(cond), std::move(blk1));
+	}
+
+}
+
+PParamPackNode Compiler::parseParamPack() {
+	if (next().symbol == Symbol::s_right_bracket) {
+		return std::make_unique<EmptyParamPackNode>();
+	}
+	while (next().symbol == Symbol::separator) commit();
+	PParamPackNode s =std::make_unique<SingleParamPackNode>(parseValue());
+	while (next().symbol == Symbol::separator) commit();
+	while (next().symbol == Symbol::s_comma) {
+		commit();
+		while (next().symbol == Symbol::separator) commit();
+		PParamPackNode s =std::make_unique<ParamPackNode>(std::move(s),parseValue());
+		while (next().symbol == Symbol::separator) commit();
+	}
+	sync(Symbol::s_right_bracket);
+	return s;
+}
+
+PNode Compiler::compileDefineFunction(PNode expr) {
+	const Identifier *in = dynamic_cast<const Identifier *>(expr.get());
+	std::vector<std::string> identifiers;
+	if (in) {
+		identifiers.push_back(in->getName().getString());
+	} else {
+		try {
+			AbstractParamPackNode &pp = dynamic_cast<AbstractParamPackNode &>(*expr);
+			std::vector<PNode> nodes;
+			pp.moveTo(nodes);
+			for (const PNode &k: nodes) {
+				const Identifier &x = dynamic_cast<const Identifier &>(*k);
+				identifiers.push_back(x.getName().getString());
+			}
+		} catch (const std::bad_cast &) {
+			throw std::runtime_error("Invalid function parameter definition");
+		}
+	}
+	commit();
+	PNode blk;
+	if (next().symbol != Symbol::s_left_brace) {
+		blk = parseBlockContent();
+	} else {
+		commit();
+		blk = parseBlock();
+	}
+	Value fn = defineUserFunction(std::move(identifiers), std::move(blk), {loc.file, loc.line+curLine});
+	return std::make_unique<ValueNode>(fn);
+
 }
 
 }

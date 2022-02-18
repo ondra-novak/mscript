@@ -27,26 +27,22 @@ namespace mscript {
  * @note state of virtual machine is modified during compilation
  */
 
-Block compile(const std::vector<Element> &code, VirtualMachine &vm, const std::string &fname, std::size_t line);
+Block compile(const std::vector<Element> &code, Value globalScope, const CodeLocation &loc);
 
 
 class Compiler {
 public:
 
-	Compiler(const std::vector<Element> &code, VirtualMachine &vm, BlockBld &bld)
-			:code(code), vm(vm), bld(bld) {}
-
-
-
-
-
+	Compiler(const std::vector<Element> &code, Value globalScope, BlockBld &bld, const CodeLocation &loc)
+			:code(code), globalScope(globalScope), bld(bld),loc(loc) {}
 
 
 
 protected:
 	const std::vector<Element> &code;
-	VirtualMachine &vm;
+	Value globalScope;
 	BlockBld &bld;
+	CodeLocation loc;
 	int curLine = 0;
 	int lastLine = 0;
 	std::size_t curSymbol = 0;
@@ -57,12 +53,17 @@ protected:
 	void commit();
 	void sync(const Element &elem);
 	void sync(const Symbol &symbol);
+	void checkBeginBlock();
+
 
 	PNode parseValue();
-	PNode handleCallable(PNode expr);
 	PParamPackNode parseParamPack();
 
-
+	PNode parseIfElse();
+	PNode handleValueSuffixes(PNode expr);
+	PNode compileDefineFunction(PNode expr);
+	PNode parseBlockContent();
+	PNode parseBlock();
 
 };
 

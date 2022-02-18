@@ -1,4 +1,7 @@
 /*
+
+
+
  * block.h
  *
  *  Created on: 15. 2. 2022
@@ -34,9 +37,7 @@ enum class Cmd:std::uint8_t{
 	deref_1,			///<dereference value, pick index from consts 1 byte
 	deref_2,			///<dereference value, pick index from consts 2 byte
 	call_fn_1,			///<call function, requires <params>, <function>- argument contains count of parameters
-	call_fn_2,			///<call function, requires <params>, <object>, <function>- argument contains count of parameters
-	call_method_1,		///<call method, requires <object> <function> <param_pack> -> replaces by result
-	call_method_2,		///<call method, requires <object> <function> <param_pack> -> replaces by result
+	call_fn_2,			///<call function, requires <params>, <function>- argument contains count of parameters
 	exec_block,			///<execute block, requires <block> -> returns result
 	push_scope,			///<create empty scope
 	pop_scope,			///<destroy toplevel scope
@@ -102,15 +103,13 @@ public:
 	std::vector<Value> consts;
 	///
 	std::vector<std::uint8_t> code;
-	///file where block is defined
-	std::string file;
-	///line in file, where block starts
-	std::size_t line;
+
+	CodeLocation location;
 
 };
 
 static inline Value packToValue(Block &&block) {
-	return json::makeValue(std::move(block), {block.file, block.line});
+	return json::makeValue(std::move(block), {block.location.file, block.location.line});
 }
 
 static inline bool isBlock(const Value &v) {

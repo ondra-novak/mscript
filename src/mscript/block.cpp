@@ -48,8 +48,6 @@ bool BlockExecution::run(VirtualMachine &vm) {
 		case Cmd::deref_2: deref(vm,block.consts[load_int2()]);break;
 		case Cmd::call_fn_1: call_fn(vm,load_int1());break;
 		case Cmd::call_fn_2: call_fn(vm,load_int2());break;
-		case Cmd::call_method_1: call_method(vm,load_int1());break;
-		case Cmd::call_method_2: call_method(vm,load_int2());break;
 		case Cmd::exec_block: exec_block(vm);break;
 		case Cmd::push_scope: vm.push_scope(Value());break;
 		case Cmd::pop_scope: vm.pop_scope();break;
@@ -104,7 +102,7 @@ bool BlockExecution::exception(VirtualMachine &vm, std::exception_ptr e) {
 }
 
 std::optional<CodeLocation> BlockExecution::getCodeLocation() const {
-	return CodeLocation{block.file, line};
+	return CodeLocation{block.location.file, block.location.line+line};
 }
 
 std::intptr_t BlockExecution::load_int1() {
@@ -171,7 +169,7 @@ void BlockExecution::call_fn(VirtualMachine &vm, std::intptr_t param_pack_size) 
 	} else {
 		vm.define_param_pack(param_pack_size);
 		const AbstractFunction &fnobj = getFunction(fn);
-		auto task = fnobj.call(vm,Value(),fn);
+		auto task = fnobj.call(vm,fn);
 		if (task != nullptr) {
 			vm.push_task(std::move(task));
 		}
@@ -179,20 +177,6 @@ void BlockExecution::call_fn(VirtualMachine &vm, std::intptr_t param_pack_size) 
 }
 
 
-void BlockExecution::call_method(VirtualMachine &vm, std::intptr_t param_pack_size) {
-	Value fn = vm.pop_value();
-	if (!isFunction(fn)) {
-		argument_is_not_function(vm, fn);
-	} else {
-		Value object = vm.pop_value();
-		vm.define_param_pack(param_pack_size);
-		const AbstractFunction &fnobj = getFunction(fn);
-		auto task = fnobj.call(vm,object,fn);
-		if (task != nullptr) {
-			vm.push_task(std::move(task));
-		}
-	}
-}
 
 void BlockExecution::exec_block(VirtualMachine &vm) {
 	Value bk = vm.pop_value();
