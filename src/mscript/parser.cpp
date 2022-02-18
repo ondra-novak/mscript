@@ -34,6 +34,7 @@ json::NamedEnum<Symbol> strKeywords({
 	{Symbol::s_arrow,"=>"}, //=>
 	{Symbol::s_comma,","}, // ,
 	{Symbol::s_dot,"."},	 // .
+	{Symbol::s_doublecolon,":"}, // ;
 	{Symbol::s_semicolon,";"}, // ;
 	{Symbol::s_questionmark,"?"}, // ?
 	{Symbol::s_exclamation,"!"}, // !
@@ -49,6 +50,9 @@ json::NamedEnum<Symbol> strKeywords({
 	{Symbol::kw_false,"false"},
 	{Symbol::kw_null,"null"},
 	{Symbol::kw_undefined,"undefined"},
+	{Symbol::kw_and,"and"},
+	{Symbol::kw_or,"or"},
+	{Symbol::kw_not,"not"},
 	{Symbol::eof,"`end of file`"},
 	{Symbol::separator,"`new line`"},   // command separator - new line
 	{Symbol::unknown_symbol,"`unknown symbol`"}

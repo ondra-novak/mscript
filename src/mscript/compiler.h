@@ -62,8 +62,18 @@ protected:
 	PNode parseIfElse();
 	PNode handleValueSuffixes(PNode expr);
 	PNode compileDefineFunction(PNode expr);
-	PNode parseBlockContent();
-	PNode parseBlock();
+	PNode compileBlockContent();
+	PNode compileBlock();
+	PNode compileCommand();
+	PNode compileExpression();
+	PNode compileAnd();
+	PNode compileOr();
+	PNode compileCompare();
+	PNode compileAddSub();
+	PNode compileMultDiv();
+	PNode compilePower();
+	PNode compileArray();
+
 
 };
 

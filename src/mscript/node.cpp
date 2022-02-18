@@ -400,5 +400,50 @@ Block buildCode(const PNode &nd, const CodeLocation &loc) {
 	};
 }
 
+void BlockNode::generateExpression(BlockBld &blk) const {
+	if (code.empty()) {
+		blk.pushCmd(Cmd::push_null); //block must return a value - empty block returns null
+	} else {
+		auto iter = code.begin();
+		auto end = code.end();
+		(*iter)->generateExpression(blk);
+		++iter;
+		while (iter != end) {
+			blk.pushCmd(Cmd::del);
+			(*iter)->generateExpression(blk);
+			++iter;
+		}
+	}
+}
+
+BlockNode::BlockNode(std::vector<PNode> &&code):code(std::move(code)) {
+}
+PushArrayNode::PushArrayNode(std::vector<PNode> &&code):code(std::move(code)) {
+}
+
+void PushArrayNode::generateExpression(BlockBld &blk) const {
+	for (const PNode &nd: code) {
+		nd->generateExpression(blk);
+	}
+	blk.pushInt(code.size(), Cmd::push_array_1);
+}
+
+BooleanAndOrNode::BooleanAndOrNode(PNode &&left, PNode &&right,bool and_node):left(std::move(left)),right(std::move(right)),and_node(and_node) {
+}
+
+void BooleanAndOrNode::generateExpression(BlockBld &blk) const {
+	left->generateExpression(blk);
+	blk.pushCmd(Cmd::dup);
+	blk.pushCmd(and_node?Cmd::jump_false_2:Cmd::jump_true_2);
+	std::size_t pos = blk.code.size();
+	blk.code.push_back(0);
+	blk.code.push_back(0);
+	blk.pushCmd(Cmd::del);
+	right->generateExpression(blk);
+	auto dist = blk.code.size() - pos -2;
+	blk.setInt2(dist, pos);
+}
+
+
 }
 

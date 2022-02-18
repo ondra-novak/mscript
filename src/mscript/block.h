@@ -78,6 +78,7 @@ enum class Cmd:std::uint8_t{
 	op_bool_not,
 	op_power,
 	op_unary_minus,
+	op_mod,
 
 	/// jumps
 

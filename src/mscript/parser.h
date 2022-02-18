@@ -38,6 +38,7 @@ enum class Symbol {
 	s_arrow, //=>
 	s_comma, // ,
 	s_dot,	 // .
+	s_doublecolon,	 // :
 	s_semicolon, // ;
 	s_questionmark, // ?
 	s_exclamation, // !
@@ -53,6 +54,9 @@ enum class Symbol {
 	kw_false,
 	kw_null,
 	kw_undefined,
+	kw_or,
+	kw_and,
+	kw_not,
 	eof,
 	separator,   // command separator - new line
 	unknown_symbol

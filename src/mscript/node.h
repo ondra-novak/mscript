@@ -252,6 +252,33 @@ namespace mscript {
 
 	Block buildCode(const PNode &nd, const CodeLocation &loc);
 
+	class BlockNode: public Expression {
+	public:
+		BlockNode(std::vector<PNode> &&code);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		std::vector<PNode> code;
+	};
+
+	class PushArrayNode: public Expression {
+	public:
+		PushArrayNode(std::vector<PNode> &&code);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		std::vector<PNode> code;
+	};
+
+	class BooleanAndOrNode: public Expression {
+	public:
+		BooleanAndOrNode(PNode &&left,PNode &&right, bool and_node);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		PNode left;
+		PNode right;
+		bool and_node;
+	};
+
+
 }
 
 
