@@ -38,6 +38,7 @@ bool BlockExecution::run(VirtualMachine &vm) {
 		case Cmd::push_const_2: vm.push_value(block.consts[load_int2()]);break;
 		case Cmd::def_param_pack_1: vm.define_param_pack(load_int1());break;
 		case Cmd::def_param_pack_2: vm.define_param_pack(load_int2());break;
+		case Cmd::collapse_param_pack: vm.collapse_param_pack();break;
 		case Cmd::dup: vm.dup_value();break;
 		case Cmd::del: vm.del_value();break;
 		case Cmd::swap: vm.swap_value();break;

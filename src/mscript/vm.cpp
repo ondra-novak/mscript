@@ -88,6 +88,7 @@ bool VirtualMachine::set_var(const std::string_view &name, const Value &value) {
 }
 
 void VirtualMachine::define_param_pack(std::size_t arguments) {
+	collapse_param_pack();
 	paramPack = std::min(calcStack.size(),arguments);
 }
 
@@ -158,9 +159,7 @@ void VirtualMachine::del_value() {
 }
 
 void VirtualMachine::push_value(const Value &val) {
-	if (paramPack != 1) { //convert to array
-		push_value(pop_value());
-	}
+	collapse_param_pack();
 	calcStack.push_back(val);
 	paramPack = 1;
 }
@@ -232,6 +231,12 @@ Value VirtualMachine::get_value(std::size_t idx) const {
 
 std::optional<CodeLocation> VirtualMachine::getExceptionCodeLocation() const {
 	return exp_location;
+}
+
+void VirtualMachine::collapse_param_pack() {
+	if (paramPack != 1) {
+		push_value(pop_value());
+	}
 }
 
 }

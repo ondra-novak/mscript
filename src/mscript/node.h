@@ -278,6 +278,33 @@ namespace mscript {
 		bool and_node;
 	};
 
+	class ForLoopNode: public Expression {
+	public:
+		ForLoopNode(Value iterator, PNode &&container, std::vector<std::pair<Value,PNode> > &&init, PNode &&block);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		Value iterator;
+		PNode container;
+		PNode block;
+		std::vector<std::pair<Value,PNode>> init;
+	};
+
+	class WhileLoopNode: public Expression {
+	public:
+		WhileLoopNode(PNode &&condition, PNode &&block);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		PNode condition;
+		PNode block;
+	};
+
+	class UpdateLineNode: public Expression {
+	public:
+		UpdateLineNode(int amount);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		int amount;
+	};
 
 }
 

@@ -192,6 +192,15 @@ PNode Compiler::parseValue() {
 		commit();
 		out = compileArray();
 		break;
+	case Symbol::kw_for:
+		commit();
+		sync(Symbol::s_right_bracket);
+		out = compileFor();
+		break;
+	case Symbol::kw_while:
+		commit();
+		sync(Symbol::s_right_bracket);
+		out = compileWhile();
 	default:
 		break;
 	}
@@ -223,14 +232,14 @@ PParamPackNode Compiler::parseParamPack() {
 	if (next().symbol == Symbol::s_right_bracket) {
 		return std::make_unique<EmptyParamPackNode>();
 	}
-	while (next().symbol == Symbol::separator) commit();
+	eatSeparators();
 	PParamPackNode s =std::make_unique<SingleParamPackNode>(compileExpression());
-	while (next().symbol == Symbol::separator) commit();
+	eatSeparators();
 	while (next().symbol == Symbol::s_comma) {
 		commit();
-		while (next().symbol == Symbol::separator) commit();
+		eatSeparators();
 		PParamPackNode s =std::make_unique<ParamPackNode>(std::move(s),compileExpression());
-		while (next().symbol == Symbol::separator) commit();
+		eatSeparators();
 	}
 	sync(Symbol::s_right_bracket);
 	return s;
@@ -284,7 +293,14 @@ PNode Compiler::compileBlockContent() {
 			vm.push_task(std::make_unique<BlockExecution>(bk));
 			while (vm.run());
 			if (vm.get_exception()) {
+				if (!nodes.empty()) { //this removes result of previous expression
+					nodes.push_back(std::make_unique<DirectCmdNode>(Cmd::del));
+				}
 				nodes.push_back(std::move(cmd));
+				if (curLine != lastLine) {
+					nodes.push_back(std::make_unique<UpdateLineNode>(curLine - lastLine));
+					lastLine = curLine;
+				}
 			}
 		} else {
 			commit();
@@ -329,15 +345,15 @@ PNode Compiler::compileExpression() {
 	auto s = next();
 	if (s.symbol == Symbol::s_questionmark) {
 		commit();
-		while (next().symbol == Symbol::separator) commit();
+		eatSeparators();
 		PNode nd2 = compileExpression();
-		while (next().symbol == Symbol::separator) commit();
+		eatSeparators();
 		auto s = next();
 		if (s.symbol == Symbol::s_doublecolon) {
 			commit();
-			while (next().symbol == Symbol::separator) commit();
+			eatSeparators();
 			PNode nd3 = compileExpression();
-			while (next().symbol == Symbol::separator) commit();
+			eatSeparators();
 			return std::make_unique<IfElseNode>(std::move(nd1),std::move(nd2),std::move(nd3));
 		} else{
 			throw std::runtime_error("Expected ':' ");
@@ -421,22 +437,80 @@ PNode Compiler::compilePower() {
 
 PNode Compiler::compileArray() {
 	std::vector<PNode> nds;
-	while (next().symbol == Symbol::separator) commit();
+	eatSeparators();
 	if (next().symbol != Symbol::s_right_square_bracket) {
 		nds.push_back(compileExpression());
-		while (next().symbol == Symbol::separator) commit();
+		eatSeparators();
 		while (next().symbol == Symbol::s_comma) {
 			commit();
-			while (next().symbol == Symbol::separator) commit();
+			eatSeparators();
 			nds.push_back(compileExpression());
-			while (next().symbol == Symbol::separator) commit();
+			eatSeparators();
 		}
-		while (next().symbol == Symbol::separator) commit();
+		eatSeparators();
 		sync(Symbol::s_right_square_bracket);
 	} else {
 		commit();
 	}
 	return std::make_unique<PushArrayNode>(std::move(nds));
 }
+
+
+void Compiler::eatSeparators() {
+	while (next().symbol == Symbol::separator)
+		commit();
+}
+
+PNode Compiler::compileFor() {
+	Value iterator;
+	PNode iter_value;
+	PNode tmp;
+	std::vector<std::pair<Value,PNode> > init;
+	if (next().symbol != Symbol::s_right_bracket) {
+		while (true) {
+			eatSeparators();
+			if (next().symbol != Symbol::identifier) {
+				throw std::runtime_error("Expected identifier");
+			}
+			Value ident = next().data;
+			commit();
+			switch(next().symbol) {
+			case Symbol::s_doublecolon:
+				commit();
+				iterator = ident;
+				iter_value = compileExpression();
+				break;
+			case Symbol::s_equal:
+				commit();
+				init.push_back({ident, compileExpression()});
+				break;
+			default:
+				throw std::runtime_error(std::string("Unexpected symbol. Expected ':' or '=' :").append(strKeywords[next().symbol]));
+			}
+			eatSeparators();
+			if (next().symbol == Symbol::s_comma) {
+				commit();
+			} else {
+				sync(Symbol::s_right_bracket);
+				break;
+			}
+		}
+	} else {
+		commit();
+	}
+	if (iter_value == nullptr) {
+		throw std::runtime_error("Operator `for` must have an iterator 'for (iterator: container)' ");
+	}
+	checkBeginBlock(); //block follows
+	return std::make_unique<ForLoopNode>(iterator, std::move(iter_value), std::move(init), parseValue());
+}
+
+PNode Compiler::compileWhile() {
+	PNode cond = compileExpression();
+	sync(Symbol::s_right_bracket);
+	checkBeginBlock(); //block follows
+	return std::make_unique<WhileLoopNode>(std::move(cond), parseValue());
+}
+
 
 }

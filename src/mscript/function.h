@@ -62,7 +62,10 @@ static inline Value defineFunction(Fn &&fn) {
 	protected:
 		Fn fn;
 	};
-	return packToValue(std::make_unique<FnClass>(std::forward<Fn>(fn)),json::null);
+	auto ptr = std::make_unique<FnClass>(std::forward<Fn>(fn));
+	auto rawptr = ptr.get();
+	std::string name = "Native fn "+std::to_string(*reinterpret_cast<const std::uintptr_t *>(&rawptr));
+	return packToValue(std::move(ptr), name);
 }
 
 }

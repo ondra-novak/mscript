@@ -28,6 +28,7 @@ enum class Cmd:std::uint8_t{
 	push_const_2,   ///<push constant from array of consts 2 bytes index
 	def_param_pack_1,  ///<define param pack 1 byte
 	def_param_pack_2,  ///<define param pack 2 bytes
+	collapse_param_pack, ///<if param pack defined, it is collapsed to array or single value
 	dup,			   ///<duplicate item on stack
 	del,				///<del item on stack
 	swap,				///<swap top most items

@@ -175,8 +175,11 @@ public:
 	 * param pack is poped as array. if anything is pushed after param pack, it converted to array
 	 *
 	 * Param pack with single value is not converted
+	 *
+	 * @note if current param pack is defined, it is collapsed
 	 */
 	void define_param_pack(std::size_t arguments);
+	void collapse_param_pack();
 
 
 	bool set_var(const std::string_view &name, const Value &value);

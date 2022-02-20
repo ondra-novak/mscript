@@ -73,8 +73,9 @@ protected:
 	PNode compileMultDiv();
 	PNode compilePower();
 	PNode compileArray();
-
-
+	PNode compileFor();
+	PNode compileWhile();
+	void eatSeparators();
 };
 
 

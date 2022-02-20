@@ -1,5 +1,6 @@
 #include <mscript/function.h>
 #include "node.h"
+#include <cmath>
 
 namespace mscript {
 
@@ -444,6 +445,114 @@ void BooleanAndOrNode::generateExpression(BlockBld &blk) const {
 	blk.setInt2(dist, pos);
 }
 
+ForLoopNode::ForLoopNode(Value iterator, PNode &&container, std::vector<std::pair<Value,PNode> > &&init, PNode &&block)
+:iterator(iterator)
+,container(std::move(container))
+,block(std::move(block))
+,init(std::move(init))
+{
 
 }
 
+class ForLoopFnTask: public AbstractTask {
+public:
+	virtual bool init(mscript::VirtualMachine &vm) {
+		//parameters are: <block> <container> <iterator> <init>....
+		auto params = vm.top_params();
+		container = params[1]; //container - param[1]
+		if (container.type() == json::number) { //container can be number - in this case, it is count of cycles
+			max_cnt = (std::size_t)std::round(container.getNumber());
+			no_container = true;		//we have no container
+		} else {
+			max_cnt = container.size();		//count are equal to size of container
+			no_container = false;			//we have container
+		}
+		if (max_cnt == 0) return false;		//if no counting - skip everything
+
+		block = params[0];					//pick block
+
+		json::Object hlp;					//0,1,2 3+ init
+		for (std::size_t i = 3; i < params.size(); i+=2) {
+			hlp.set(params[i+1].getString(), params[i]);	//build object for scope
+		}
+		prevScope = hlp;					//create scope object
+		iterator = params[2];				//pick iterator
+		pos = 0;							//initialize position
+		vm.del_value();						//discard parameters
+		return true;						//function can continue
+
+	}
+	virtual bool run(mscript::VirtualMachine &vm) {
+		if (pos) {									//if (pos != 0) - not first cycle
+			vm.del_value();
+			prevScope = vm.scope_to_object();
+			vm.pop_scope();
+		}
+		vm.push_scope(prevScope);
+		vm.set_var(iterator.getString(), no_container?Value(pos):container[pos]);
+		vm.push_task(std::make_unique<BlockExecution>(block));
+		++pos;
+		return true;
+	}
+	Value prevScope;
+	Value container;
+	Value block;
+	Value iterator;
+	std::size_t pos;
+	std::size_t max_cnt;
+	bool no_container;
+};
+
+void ForLoopNode::generateExpression(BlockBld &blk) const {
+	block->generateExpression(blk);
+	container->generateExpression(blk);
+	blk.pushInt(blk.pushConst(iterator), Cmd::push_const_1);
+	for (const auto &x: init) {
+		x.second->generateExpression(blk);
+		blk.pushInt(blk.pushConst(x.first), Cmd::push_const_1);
+	}
+	static Value forLoopFn = defineFunction([](VirtualMachine &vm, Value closure){
+		return std::make_unique<ForLoopFnTask>();
+	});
+	blk.pushInt(blk.pushConst(forLoopFn), Cmd::push_const_1);
+	blk.pushInt(init.size()*2+3, Cmd::call_fn_1);
+
+
+}
+
+WhileLoopNode::WhileLoopNode(PNode &&condition, PNode &&block):condition(std::move(condition)),block(std::move(block)) {
+}
+
+void WhileLoopNode::generateExpression(BlockBld &blk) const {
+	condition->generateExpression(blk); //<condition>
+	blk.pushCmd(Cmd::jump_false_2);		//.... jumps if false
+	blk.pushCmd(Cmd::push_null);		//<retval>
+	std::intptr_t lb1 = blk.code.size();
+	blk.code.push_back(0);
+	blk.code.push_back(0);
+	blk.pushCmd(Cmd::push_null);		//<retval> <scope>
+	std::intptr_t lb2 = blk.code.size();    //<retval> <scope>
+	blk.pushCmd(Cmd::push_scope_object);	//<retval>
+	blk.pushCmd(Cmd::del);					//
+	block->generateExpression(blk);			//<block>
+	blk.pushCmd(Cmd::exec_block);			//<retval>
+	blk.pushCmd(Cmd::scope_to_object);		//<retval> <scope>
+	condition->generateExpression(blk);		//<retval> <scope> <condition>
+	blk.pushCmd(Cmd::jump_true_2);			//<retval> <scope>   ... jumps if true
+	std::intptr_t lb3 = blk.code.size();
+	blk.code.push_back(0);
+	blk.code.push_back(0);
+	blk.pushCmd(Cmd::del);					//<retval>
+	std::intptr_t lb4 = blk.code.size();	//<retval>
+	blk.setInt2(lb4-lb1-2, lb1);
+	blk.setInt2(lb2-lb3-2, lb3);
+}
+
+UpdateLineNode::UpdateLineNode(int amount):amount(amount) {
+}
+
+void UpdateLineNode::generateExpression(BlockBld &blk) const {
+	blk.pushInt(amount, Cmd::dbg_inc_line_1);
+}
+
+}
