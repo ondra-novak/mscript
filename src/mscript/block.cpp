@@ -38,6 +38,8 @@ bool BlockExecution::run(VirtualMachine &vm) {
 		case Cmd::push_const_2: vm.push_value(block.consts[load_int2()]);break;
 		case Cmd::def_param_pack_1: vm.define_param_pack(load_int1());break;
 		case Cmd::def_param_pack_2: vm.define_param_pack(load_int2());break;
+		case Cmd::expand_param_pack_1: expand_param_pack(vm,load_int1());break;
+		case Cmd::expand_param_pack_2: expand_param_pack(vm,load_int2());break;
 		case Cmd::collapse_param_pack: vm.collapse_param_pack();break;
 		case Cmd::dup: vm.dup_value();break;
 		case Cmd::del: vm.del_value();break;
@@ -59,6 +61,8 @@ bool BlockExecution::run(VirtualMachine &vm) {
 		case Cmd::inc_ir: ++ir;break;
 		case Cmd::set_var_ir_1: set_var_parampack(vm,load_int1());break;
 		case Cmd::set_var_ir_2: set_var_parampack(vm,load_int2());break;
+		case Cmd::set_var_arr_ir_1: set_var_arr_parampack(vm,load_int1());break;
+		case Cmd::set_var_arr_ir_2: set_var_arr_parampack(vm,load_int2());break;
 		case Cmd::set_var_1: set_var(vm,load_int1());break;
 		case Cmd::set_var_2: set_var(vm,load_int2());break;
 		case Cmd::op_add: bin_op(vm,op_add);break;
@@ -168,12 +172,7 @@ void BlockExecution::call_fn(VirtualMachine &vm, std::intptr_t param_pack_size) 
 	if (!isFunction(fn)) {
 		argument_is_not_function(vm, fn);
 	} else {
-		vm.define_param_pack(param_pack_size);
-		const AbstractFunction &fnobj = getFunction(fn);
-		auto task = fnobj.call(vm,fn);
-		if (task != nullptr) {
-			vm.push_task(std::move(task));
-		}
+		vm.call_function_raw(fn, param_pack_size);
 	}
 }
 
@@ -375,6 +374,32 @@ void BlockExecution::do_push_array(VirtualMachine &vm, std::intptr_t count) {
 	Value arr (json::array, pp.begin(), pp.end(), [](const Value &a){return a;});
 	vm.del_value();
 	vm.push_value(arr);
+}
+
+void BlockExecution::expand_param_pack(VirtualMachine &vm, std::intptr_t amount) {
+	if (amount > 0) {
+		auto top = vm.top_value();
+		if (top.isContainer()) {
+			vm.del_value();
+			for (Value x: top) {
+				vm.push_value(x);
+			}
+			vm.define_param_pack(top.size()+amount-1);
+			return;
+		}
+	}
+	vm.define_param_pack(amount);
+}
+
+void BlockExecution::set_var_arr_parampack(VirtualMachine &vm, std::intptr_t cindex) {
+	auto args = vm.top_params();
+	Value v (json::array, args.begin()+ir, args.end(), [](Value v){return v;});
+	ir = args.size();
+	auto name = block.consts[cindex].getString();
+	if (!vm.set_var(name, v)) {
+		variable_already_assigned(vm, name);
+	}
+
 }
 
 Value BlockExecution::op_unar_minus(const Value &a) {

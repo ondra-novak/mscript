@@ -105,10 +105,14 @@ namespace mscript {
 	class AbstractParamPackNode: public INode {
 	public:
 		virtual void moveTo(std::vector<PNode> &nodes) = 0;
-		static void makeAssign(BlockBld &blk, const PNode &n);
+		static void makeAssign(BlockBld &blk, const PNode &n, bool arr);
 		virtual std::size_t count() const = 0;
 		virtual void generateUnclosedExpression(BlockBld &blk) const = 0;
 		virtual void generateExpression(BlockBld &blk) const override;
+		void setInfinite(bool inf) {infinite = inf;}
+		bool isInfinte() const {return infinite;}
+	protected:
+		bool infinite = false;
 	};
 
 	using PParamPackNode = std::unique_ptr<AbstractParamPackNode>;

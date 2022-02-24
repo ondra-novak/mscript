@@ -28,6 +28,8 @@ enum class Cmd:std::uint8_t{
 	push_const_2,   ///<push constant from array of consts 2 bytes index
 	def_param_pack_1,  ///<define param pack 1 byte
 	def_param_pack_2,  ///<define param pack 2 bytes
+	expand_param_pack_1,  ///<similar to def, if last item is array, it is expanded - 1 byte
+	expand_param_pack_2,  ///<similar to def, if last item is array, it is expanded - 2 bytes
 	collapse_param_pack, ///<if param pack defined, it is collapsed to array or single value
 	dup,			   ///<duplicate item on stack
 	del,				///<del item on stack
@@ -59,8 +61,11 @@ enum class Cmd:std::uint8_t{
 	inc_ir,				///<increase ir, skip argument
 	set_var_ir_1,		///<pick name of variable from consts (1 byte), set variable from param_pack by register ir, increase ir by 1
 	set_var_ir_2,		///<pick name of variable from consts (2 byte), set variable from param_pack by register ir, increase ir by 1
+	set_var_arr_ir_1,	///<stores rest of param pack to variable - from ir to end
+	set_var_arr_ir_2,	///<stores rest of param pack to variable - from ir to end
 	set_var_1,		    ///<pick name of variable from consts (1 byte), set variable
 	set_var_2,		    ///<pick name of variable from consts (2 byte), set variable
+
 
 	/// operations
 
@@ -153,11 +158,14 @@ protected:
 	void exec_block(VirtualMachine &vm);
 	void do_raise(VirtualMachine &vm);
 	void set_var_parampack(VirtualMachine &vm, std::intptr_t cindex);
+	void set_var_arr_parampack(VirtualMachine &vm, std::intptr_t cindex);
 	void set_var(VirtualMachine &vm, std::intptr_t cindex);
 
 	void bin_op(VirtualMachine &vm, Value (*fn)(const Value &a, const Value &b));
 	void unar_op(VirtualMachine &vm, Value (*fn)(const Value &a));
 	void op_cmp(VirtualMachine &vm, bool (*fn)(int z));
+
+	void expand_param_pack(VirtualMachine &, std::intptr_t amount);
 
 	void invalid_instruction(VirtualMachine &vm, Cmd cmd);
 	void variable_not_found(VirtualMachine &vm, std::string_view name);

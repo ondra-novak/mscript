@@ -68,6 +68,17 @@ static inline Value defineFunction(Fn &&fn) {
 	return packToValue(std::move(ptr), name);
 }
 
+template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<ParamPack>()))>
+static inline Value defineSimpleFn(Fn &&fn) {
+	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value closure){
+		auto params = vm.top_params();
+		Value ret = fn(params);
+		vm.del_value();
+		vm.push_value(ret);
+		return nullptr;
+	});
+}
+
 }
 
 

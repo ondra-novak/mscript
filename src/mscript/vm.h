@@ -211,6 +211,28 @@ public:
 	///When machine stops because exception, this returns code location of the exception
 	std::optional<CodeLocation> getExceptionCodeLocation() const;
 
+	///Passes arguments to stack and calls function
+	/**
+	 * @param fnval function value
+	 * @param args arguments
+	 * @retval false function executed synchronously - result is immediately available
+	 * @retval true function executed asynchronously - result will be available on next cycle
+	 */
+	template<typename ... Args>
+	bool call_function(Value fnval, const Args & ... args);
+
+	///Calls function, while arguments are already ready on stack
+	/**
+	 * @param fnval function value
+	 * @param argCnt count of arguments ready on stack
+	 * @retval false function executed synchronously - result is immediately available
+	 * @retval true function executed asynchronously - result will be available on next cycle
+	 */
+	bool call_function_raw(Value fnval, std::size_t argCnt);
+
+
+
+
 protected:
 
 	TaskStack taskStack;
@@ -221,10 +243,23 @@ protected:
 	std::exception_ptr exp = nullptr;
 	std::optional<CodeLocation> exp_location;
 
+	template<typename ... Args>
+	void push_arguments(const Value &v, const Args & ... args) {
+		push_value(v);
+		push_arguments(args...);
+	}
+
+	void push_arguments() {}
+
 
 
 };
 
+template<typename ... Args>
+inline bool VirtualMachine::call_function(Value fnval, const Args &... args) {
+	push_arguments(args...);
+	return call_function_raw(fnval,sizeof...(Args));
+}
 
 
 
@@ -232,7 +267,6 @@ protected:
 
 
 }
-
 
 
 #endif /* SRC_MSCRIPT_VM_H_ */

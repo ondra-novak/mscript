@@ -34,6 +34,8 @@ json::NamedEnum<Symbol> strKeywords({
 	{Symbol::s_arrow,"=>"}, //=>
 	{Symbol::s_comma,","}, // ,
 	{Symbol::s_dot,"."},	 // .
+	{Symbol::s_twodots, ".."},
+	{Symbol::s_threedots, "..."},
 	{Symbol::s_doublecolon,":"}, // ;
 	{Symbol::s_semicolon,";"}, // ;
 	{Symbol::s_questionmark,"?"}, // ?

@@ -51,24 +51,23 @@ ParamPackNode::ParamPackNode(PNode &&current, PNode &&nw) {
 	}
 }
 
-void AbstractParamPackNode::makeAssign(BlockBld &blk, const PNode &n) {
+void AbstractParamPackNode::makeAssign(BlockBld &blk, const PNode &n, bool arr) {
 	const Underscore *itm = dynamic_cast<const Underscore *>(n.get());
 	if (itm == nullptr) {
 		const Identifier *itm = dynamic_cast<const Identifier *>(n.get());
 		if (itm == nullptr) {
 			throw std::runtime_error("Invalid assignment expression");
 		} else {
-			blk.pushInt(blk.pushConst(itm->getName()), Cmd::set_var_ir_1);
+			blk.pushInt(blk.pushConst(itm->getName()), arr?Cmd::set_var_arr_ir_1:Cmd::set_var_ir_1);
 		}
 	}
 }
 
 void ParamPackNode::generateAssign(BlockBld &blk) const {
-	blk.pushCmd(Cmd::reset_ir);
 	auto iter = nodes.begin();
 	auto end = nodes.end();
 	while (true) {
-		makeAssign(blk,*iter);
+		makeAssign(blk,*iter, this->infinite && iter+1 == end);
 		++iter;
 		if (iter == end) break;
 		blk.pushCmd(Cmd::inc_ir);
@@ -148,7 +147,7 @@ SingleParamPackNode::SingleParamPackNode(PNode &&n):n(std::move(n)) {}
 
 void SingleParamPackNode::generateAssign(BlockBld &blk) const {
 	blk.pushCmd(Cmd::reset_ir);
-	makeAssign(blk, n);
+	makeAssign(blk, n, this->infinite);
 }
 
 void SingleParamPackNode::generateUnclosedExpression(BlockBld &blk) const {
@@ -210,7 +209,7 @@ std::size_t EmptyParamPackNode::count() const {
 
 void AbstractParamPackNode::generateExpression(BlockBld &blk) const {
 	generateUnclosedExpression(blk);
-	blk.pushInt(count(), Cmd::def_param_pack_1);
+	blk.pushInt(count(), infinite?Cmd::expand_param_pack_1:Cmd::def_param_pack_1);
 
 }
 

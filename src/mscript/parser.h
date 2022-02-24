@@ -38,6 +38,8 @@ enum class Symbol {
 	s_arrow, //=>
 	s_comma, // ,
 	s_dot,	 // .
+	s_twodots, //...
+	s_threedots, //...
 	s_doublecolon,	 // :
 	s_semicolon, // ;
 	s_questionmark, // ?
@@ -89,12 +91,12 @@ public:
 
 		while (true) {
 			int c = this->rd.nextCommit();
-			while (c == '\t' || c == ' ' || (wasNl && (c == '\n' || c=='\r'))) c = this->rd();
-			wasNl = false;
+			while (c == '\t' || c == ' ' ) c = this->rd();
 			switch (c) {
 				case -1: return {Symbol::eof};
-				case '\n':
-				case '\r': wasNl = true; return {Symbol::separator};
+				case '\n': return {Symbol::separator};
+				case '\r': if (this->rd.next() == '\n') this->rd.commit();
+						   return {Symbol::separator};
 				case '!':switch (this->rd.next()) {
 					case '=': this->rd.commit(); return {Symbol::s_not_equal};;
 					default: return {Symbol::s_exclamation};;
@@ -121,8 +123,16 @@ public:
 					case '=': this->rd.commit(); return {Symbol::s_equal};
 					case '>': this->rd.commit(); return {Symbol::s_arrow};
 					default: return {Symbol::s_equal};
-				}
-				case '.':return {Symbol::s_dot};
+				};
+				case '.': switch (this->rd.next()) {
+					default: return {Symbol::s_equal};
+					case '.': this->rd.commit();
+							switch (this->rd.next()) {
+								case '.': this->rd.commit(); return {Symbol::s_threedots};
+								default: return {Symbol::s_twodots};
+							}
+					default: return {Symbol::s_dot};
+				};
 				case ';': return {Symbol::s_semicolon};
 				case ',': return {Symbol::s_comma};
 				case '[': return {Symbol::s_left_square_bracket};
@@ -135,7 +145,8 @@ public:
 					while (c != '\r' && c != '\n' && c != -1) {
 						this->rd.commit();
 						c = this->rd.next();
-					}
+					};
+					break;
 				default:
 					if (isalpha(c) || c == '_') {
 						buffer.clear();
@@ -161,7 +172,6 @@ public:
 	}
 
 protected:
-	bool wasNl = false;
 	std::string buffer;
 
 };

@@ -6,6 +6,7 @@
  */
 
 #include <imtjson/object.h>
+#include <mscript/function.h>
 #include "vm.h"
 
 namespace mscript {
@@ -236,6 +237,18 @@ std::optional<CodeLocation> VirtualMachine::getExceptionCodeLocation() const {
 void VirtualMachine::collapse_param_pack() {
 	if (paramPack != 1) {
 		push_value(pop_value());
+	}
+}
+
+bool VirtualMachine::call_function_raw(Value fnval, std::size_t argCnt) {
+	define_param_pack(argCnt);
+	const AbstractFunction &fnobj = getFunction(fnval);
+	auto task = fnobj.call(*this,fnval);
+	if (task != nullptr) {
+		push_task(std::move(task));
+		return true;
+	} else {
+		return false;
 	}
 }
 

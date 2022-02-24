@@ -241,6 +241,10 @@ PParamPackNode Compiler::parseParamPack() {
 		PParamPackNode s =std::make_unique<ParamPackNode>(std::move(s),compileExpression());
 		eatSeparators();
 	}
+	if (next().symbol == Symbol::s_threedots) {
+		commit();
+		s->setInfinite(true);
+	}
 	sync(Symbol::s_right_bracket);
 	return s;
 }
