@@ -318,10 +318,8 @@ void MethodCallNode::generateExpression(BlockBld &blk) const {
 	pp->generateExpression(blk);					//<params>
 	left->generateExpression(blk);					//<params> <object>
 	blk.pushCmd(Cmd::dup);							//<params> <object> <object>
-	blk.pushCmd(Cmd::dup);							//<params> <object> <object> <object>
 	blk.pushCmd(Cmd::push_scope_object);			//<params> <object> <object>   -> scope
-	blk.pushInt(blk.pushConst("this"),Cmd::set_var_1); //<params> <object>    -> variable this
-	blk.pushInt(blk.pushConst(identifier), Cmd::deref_1);	//<params> <function>    -> <object>.<identifier>
+	blk.pushInt(blk.pushConst(identifier), Cmd::deref_fn_1);	//<params> <function>    -> <object>.<identifier>
 	blk.pushInt(pp->count(), Cmd::call_fn_1);		//<result>
 	blk.pushCmd(Cmd::pop_scope);					//<result>
 }

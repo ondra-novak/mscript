@@ -38,6 +38,23 @@ protected:
 
 };
 
+
+class ArgumentIsNotFunction: public VMException {
+public:
+	ArgumentIsNotFunction(const Value &idx):idx(idx) {}
+	virtual void what(std::string &out) const override;
+protected:
+	Value idx;
+};
+
+class ArgumentIsNotBlock: public VMException {
+public:
+	ArgumentIsNotBlock(const Value &idx):idx(idx) {}
+	virtual void what(std::string &out) const override;
+protected:
+	Value idx;
+};
+
 }
 
 

@@ -6,6 +6,7 @@
  */
 
 #include <imtjson/object.h>
+#include <mscript/exceptions.h>
 #include <mscript/function.h>
 #include "vm.h"
 
@@ -41,10 +42,18 @@ void VirtualMachine::reset() {
 }
 
 bool VirtualMachine::run() {
-	if (taskStack.empty()) return false;
+	std::size_t task_sz = taskStack.size();
+	if (!task_sz) return false;
 	const auto &task = taskStack.back();
 	if (!task->run(*this)) {
-		taskStack.pop_back();
+		//so task returned false, but added task or more tasks - we need to delete it from middle
+		if (task_sz >= taskStack.size()) {
+			taskStack.erase(taskStack.begin()+task_sz-1);
+			//if no task added, remove last task
+		} else if (task_sz == taskStack.size()) {
+			taskStack.pop_back();
+		}
+		//if tasks are reduced, then no action is performed, last task was probably terminated by exception
 	}
 	return true;
 }
@@ -98,7 +107,7 @@ ParamPack VirtualMachine::top_params() const {
 }
 
 void VirtualMachine::raise(std::exception_ptr e) {
-	exp_location.reset();
+	exp_location.clear();
 	std::size_t p = taskStack.size();
 	while (p) {
 		--p;
@@ -106,8 +115,9 @@ void VirtualMachine::raise(std::exception_ptr e) {
 			taskStack.resize(p+1);
 			return;
 		}
-		if (!exp_location.has_value()) {
-			exp_location = taskStack[p]->getCodeLocation();
+		auto loc = taskStack[p]->getCodeLocation();
+		if (loc.has_value()) {
+			exp_location.push_back(*loc);
 		}
 	}
 	reset();
@@ -163,6 +173,12 @@ void VirtualMachine::push_value(const Value &val) {
 	collapse_param_pack();
 	calcStack.push_back(val);
 	paramPack = 1;
+}
+
+Value VirtualMachine::get_this() {
+	if (scopeStack.empty()) return json::undefined;
+	const auto &scope = scopeStack.back();
+	return scope.get_parent_link()[0];
 }
 
 bool VirtualMachine::restore_state(const VMState &st) {
@@ -230,7 +246,7 @@ Value VirtualMachine::get_value(std::size_t idx) const {
 	else return calcStack[sz - idx];
 }
 
-std::optional<CodeLocation> VirtualMachine::getExceptionCodeLocation() const {
+std::vector<CodeLocation> VirtualMachine::getExceptionCodeLocation() const {
 	return exp_location;
 }
 
@@ -241,14 +257,18 @@ void VirtualMachine::collapse_param_pack() {
 }
 
 bool VirtualMachine::call_function_raw(Value fnval, std::size_t argCnt) {
-	define_param_pack(argCnt);
-	const AbstractFunction &fnobj = getFunction(fnval);
-	auto task = fnobj.call(*this,fnval);
-	if (task != nullptr) {
-		push_task(std::move(task));
-		return true;
+	if (!isFunction(fnval)) {
+		throw ArgumentIsNotFunction(fnval);
 	} else {
-		return false;
+		define_param_pack(argCnt);
+		const AbstractFunction &fnobj = getFunction(fnval);
+		auto task = fnobj.call(*this,fnval);
+		if (task != nullptr) {
+			push_task(std::move(task));
+			return true;
+		} else {
+			return false;
+		}
 	}
 }
 

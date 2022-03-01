@@ -201,6 +201,11 @@ PNode Compiler::parseValue() {
 		commit();
 		sync(Symbol::s_right_bracket);
 		out = compileWhile();
+		break;
+	case Symbol::kw_this:
+		commit();
+		out = std::make_unique<ThisNode>();
+		break;
 	default:
 		break;
 	}

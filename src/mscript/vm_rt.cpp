@@ -17,7 +17,7 @@ namespace mscript {
 
 class AbstractMapTask: public AbstractTask {
 public:
-	void bool postInit() {
+	bool post_init(mscript::VirtualMachine &vm) {
 		if (!container.isContainer()) {
 			vm.raise(std::make_exception_ptr(std::runtime_error("The first argument of the function must be a container")));
 			return false;
@@ -48,11 +48,11 @@ public:
 		fn = args[1];
 		init_block = args[2];
 		vm.del_value();
-		return post_init();
+		return post_init(vm);
 	}
 	virtual void add_result(Value result) = 0;
 	virtual Value get_result() const = 0;
-	virtual void call_fn() = 0;
+	virtual void call_fn(mscript::VirtualMachine &vm) = 0;
 
 	virtual bool run(mscript::VirtualMachine &vm) override {
 		if (init_block.defined()) {
@@ -77,7 +77,7 @@ public:
 			vm.del_value();
 		}
 		vm.push_scope(prevScope);
-		call_fn();
+		call_fn(vm);
 		++index;
 		return true;
 	}
@@ -95,7 +95,7 @@ class MapTask: public AbstractMapTask {
 public:
 	virtual void add_result(Value result) override {r.push_back(result);}
 	virtual Value get_result() const override {return r;}
-	virtual void call_fn() override {
+	virtual void call_fn(mscript::VirtualMachine &vm) override {
 		vm.call_function(fn, container[index], index, container);
 	}
 	json::Array r;
@@ -112,11 +112,11 @@ public:
 		sum = args[2];
 		init_block = args[3];
 		vm.del_value();
-		return post_init();
+		return post_init(vm);
 	}
 	virtual void add_result(Value result) override {sum = result;}
 	virtual Value get_result() const override {return sum;}
-	virtual void call_fn() override {
+	virtual void call_fn(mscript::VirtualMachine &vm) override {
 		vm.call_function(fn, sum, container[index], index, container);
 	}
 protected:

@@ -40,6 +40,19 @@ Value CustomVMException::asValue() const {
 	return value;
 }
 
+void ArgumentIsNotFunction::what(std::string &out) const {
+	out.append("Argument is not a function: '");
+	idx.serialize([&](char c){out.push_back(c);});
+	out.append("'");
+}
+
+void ArgumentIsNotBlock::what(std::string &out) const {
+	out.append("Argument is not a block: '");
+	idx.serialize([&](char c){out.push_back(c);});
+	out.append("'");
+
+
 }
 
 
+}

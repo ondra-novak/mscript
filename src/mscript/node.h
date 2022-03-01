@@ -174,6 +174,10 @@ namespace mscript {
 	public:
 		NullNode(): DirectCmdNode(Cmd::push_null) {}
 	};
+	class ThisNode: public DirectCmdNode{
+	public:
+		ThisNode(): DirectCmdNode(Cmd::push_this) {}
+	};
 	class UndefinedNode: public DirectCmdNode{
 	public:
 		UndefinedNode(): DirectCmdNode(Cmd::push_undefined) {}

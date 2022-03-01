@@ -10,7 +10,6 @@
 
 int main(int argc, char **argv) {
 
-	mscript::VirtualMachine vm;
 
 	return 0;
 }

@@ -39,6 +39,8 @@ enum class Cmd:std::uint8_t{
 	deref,				///<pick value and index, derefence object or array
 	deref_1,			///<dereference value, pick index from consts 1 byte
 	deref_2,			///<dereference value, pick index from consts 2 byte
+	deref_fn_1,			///<dereference of function of the value
+	deref_fn_2,			///<dereference of function of the value
 	call_fn_1,			///<call function, requires <params>, <function>- argument contains count of parameters
 	call_fn_2,			///<call function, requires <params>, <function>- argument contains count of parameters
 	exec_block,			///<execute block, requires <block> -> returns result
@@ -52,6 +54,7 @@ enum class Cmd:std::uint8_t{
 	push_false,			///<push false value
 	push_null,			///<push null
 	push_undefined,		///<push undefined
+	push_this,			///<push this value
 	push_array_1,		///<push array (argument count items)
 	push_array_2,		///<push array (argument count items)
 	push_array_4,		///<push array (argument count items)
@@ -153,6 +156,7 @@ protected:
 
 	void getVar(VirtualMachine &vm, std::intptr_t idx);
 	void deref(VirtualMachine &vm, Value idx);
+	void deref_fn(VirtualMachine &vm, Value idx);
 	void call_fn(VirtualMachine &vm, std::intptr_t param_pack_size);
 	void call_method(VirtualMachine &vm, std::intptr_t param_pack_size);
 	void exec_block(VirtualMachine &vm);
@@ -185,6 +189,8 @@ protected:
 	static Value op_not(const Value &a);
 	static Value op_unar_minus(const Value &a);
 
+
+	static Value do_deref(const Value where, const Value &what);
 };
 
 class InvalidInstruction: public VMException {
@@ -219,21 +225,6 @@ protected:
 	Value idx;
 };
 
-class ArgumentIsNotFunction: public VMException {
-public:
-	ArgumentIsNotFunction(const Value &idx):idx(idx) {}
-	virtual void what(std::string &out) const override;
-protected:
-	Value idx;
-};
-
-class ArgumentIsNotBlock: public VMException {
-public:
-	ArgumentIsNotBlock(const Value &idx):idx(idx) {}
-	virtual void what(std::string &out) const override;
-protected:
-	Value idx;
-};
 
 }
 

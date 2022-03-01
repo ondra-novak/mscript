@@ -25,80 +25,88 @@ bool BlockExecution::run(VirtualMachine &vm) {
 	if (ip >= block.code.size()) {
 		return false;
 	}
-	Cmd cmd = static_cast<Cmd>(block.code[ip]);
-	++ip;
-	switch (cmd) {
-		case Cmd::noop:	break;
-		case Cmd::push_int_1: vm.push_value(load_int1());break;
-		case Cmd::push_int_2: vm.push_value(load_int2());break;
-		case Cmd::push_int_4: vm.push_value(load_int4());break;
-		case Cmd::push_int_8: vm.push_value(load_int8());break;
-		case Cmd::push_double: vm.push_value(load_double());break;
-		case Cmd::push_const_1: vm.push_value(block.consts[load_int1()]);break;
-		case Cmd::push_const_2: vm.push_value(block.consts[load_int2()]);break;
-		case Cmd::def_param_pack_1: vm.define_param_pack(load_int1());break;
-		case Cmd::def_param_pack_2: vm.define_param_pack(load_int2());break;
-		case Cmd::expand_param_pack_1: expand_param_pack(vm,load_int1());break;
-		case Cmd::expand_param_pack_2: expand_param_pack(vm,load_int2());break;
-		case Cmd::collapse_param_pack: vm.collapse_param_pack();break;
-		case Cmd::dup: vm.dup_value();break;
-		case Cmd::del: vm.del_value();break;
-		case Cmd::swap: vm.swap_value();break;
-		case Cmd::get_var_1: getVar(vm,load_int1());break;
-		case Cmd::get_var_2: getVar(vm,load_int2());break;
-		case Cmd::deref: deref(vm,vm.pop_value());break;
-		case Cmd::deref_1: deref(vm,block.consts[load_int1()]);break;
-		case Cmd::deref_2: deref(vm,block.consts[load_int2()]);break;
-		case Cmd::call_fn_1: call_fn(vm,load_int1());break;
-		case Cmd::call_fn_2: call_fn(vm,load_int2());break;
-		case Cmd::exec_block: exec_block(vm);break;
-		case Cmd::push_scope: vm.push_scope(Value());break;
-		case Cmd::pop_scope: vm.pop_scope();break;
-		case Cmd::push_scope_object: vm.push_scope(vm.pop_value());break;
-		case Cmd::scope_to_object: vm.push_value(vm.scope_to_object());break;
-		case Cmd::raise:do_raise(vm);break;
-		case Cmd::reset_ir:ir = 0;break;
-		case Cmd::inc_ir: ++ir;break;
-		case Cmd::set_var_ir_1: set_var_parampack(vm,load_int1());break;
-		case Cmd::set_var_ir_2: set_var_parampack(vm,load_int2());break;
-		case Cmd::set_var_arr_ir_1: set_var_arr_parampack(vm,load_int1());break;
-		case Cmd::set_var_arr_ir_2: set_var_arr_parampack(vm,load_int2());break;
-		case Cmd::set_var_1: set_var(vm,load_int1());break;
-		case Cmd::set_var_2: set_var(vm,load_int2());break;
-		case Cmd::op_add: bin_op(vm,op_add);break;
-		case Cmd::op_sub: bin_op(vm,op_sub);break;
-		case Cmd::op_mult: bin_op(vm,op_mult);break;
-		case Cmd::op_div: bin_op(vm,op_div);break;
-		case Cmd::op_cmp_eq: op_cmp(vm,[](int x){return x == 0;});break;
-		case Cmd::op_cmp_less: op_cmp(vm,[](int x){return x < 0;});break;
-		case Cmd::op_cmp_greater: op_cmp(vm,[](int x){return x > 0;});break;
-		case Cmd::op_cmp_less_eq: op_cmp(vm,[](int x){return x <= 0;});break;
-		case Cmd::op_cmp_greater_eq: op_cmp(vm,[](int x){return x >= 0;});break;
-		case Cmd::op_cmp_not_eq: op_cmp(vm,[](int x){return x != 0;});break;
-		case Cmd::op_bool_and: bin_op(vm,op_and);break;
-		case Cmd::op_bool_or: bin_op(vm,op_or);break;
-		case Cmd::op_bool_not: unar_op(vm,op_not);break;
-		case Cmd::op_power: bin_op(vm,op_power);break;
-		case Cmd::jump_1: ip+=load_int1();break;
-		case Cmd::jump_2: ip+=load_int2();break;
-		case Cmd::jump_true_1: ip+=load_int1() * (vm.pop_value().getBool()?1:0);break;
-		case Cmd::jump_true_2: ip+=load_int2() * (vm.pop_value().getBool()?1:0);break;
-		case Cmd::jump_false_1: ip+=load_int1() * (vm.pop_value().getBool()?0:1);break;
-		case Cmd::jump_false_2: ip+=load_int2() * (vm.pop_value().getBool()?0:1);break;
-		case Cmd::exit_block: ip = block.code.size();break;
-		case Cmd::dbg_inc_line_1: line+=load_int1();break;
-		case Cmd::dbg_inc_line_2: line+=load_int2();break;
-		case Cmd::push_false: vm.push_value(false);break;
-		case Cmd::push_true: vm.push_value(true);break;
-		case Cmd::push_null: vm.push_value(nullptr);break;
-		case Cmd::push_undefined: vm.push_value(json::undefined);break;
-		case Cmd::op_unary_minus: unar_op(vm, op_unar_minus);break;
-		case Cmd::push_array_1: do_push_array(vm, load_int1());break;
-		case Cmd::push_array_2: do_push_array(vm, load_int2());break;
-		case Cmd::push_array_4: do_push_array(vm, load_int4());break;
-		default: invalid_instruction(vm,cmd);
+	try {
+		Cmd cmd = static_cast<Cmd>(block.code[ip]);
+		++ip;
+		switch (cmd) {
+			case Cmd::noop:	break;
+			case Cmd::push_int_1: vm.push_value(load_int1());break;
+			case Cmd::push_int_2: vm.push_value(load_int2());break;
+			case Cmd::push_int_4: vm.push_value(load_int4());break;
+			case Cmd::push_int_8: vm.push_value(load_int8());break;
+			case Cmd::push_double: vm.push_value(load_double());break;
+			case Cmd::push_const_1: vm.push_value(block.consts[load_int1()]);break;
+			case Cmd::push_const_2: vm.push_value(block.consts[load_int2()]);break;
+			case Cmd::def_param_pack_1: vm.define_param_pack(load_int1());break;
+			case Cmd::def_param_pack_2: vm.define_param_pack(load_int2());break;
+			case Cmd::expand_param_pack_1: expand_param_pack(vm,load_int1());break;
+			case Cmd::expand_param_pack_2: expand_param_pack(vm,load_int2());break;
+			case Cmd::collapse_param_pack: vm.collapse_param_pack();break;
+			case Cmd::dup: vm.dup_value();break;
+			case Cmd::del: vm.del_value();break;
+			case Cmd::swap: vm.swap_value();break;
+			case Cmd::get_var_1: getVar(vm,load_int1());break;
+			case Cmd::get_var_2: getVar(vm,load_int2());break;
+			case Cmd::deref: deref(vm,vm.pop_value());break;
+			case Cmd::deref_1: deref(vm,block.consts[load_int1()]);break;
+			case Cmd::deref_2: deref(vm,block.consts[load_int2()]);break;
+			case Cmd::deref_fn_1: deref_fn(vm,block.consts[load_int1()]);break;
+			case Cmd::deref_fn_2: deref_fn(vm,block.consts[load_int2()]);break;
+			case Cmd::call_fn_1: call_fn(vm,load_int1());break;
+			case Cmd::call_fn_2: call_fn(vm,load_int2());break;
+			case Cmd::exec_block: exec_block(vm);break;
+			case Cmd::push_scope: vm.push_scope(Value());break;
+			case Cmd::pop_scope: vm.pop_scope();break;
+			case Cmd::push_scope_object: vm.push_scope(vm.pop_value());break;
+			case Cmd::scope_to_object: vm.push_value(vm.scope_to_object());break;
+			case Cmd::raise:do_raise(vm);break;
+			case Cmd::reset_ir:ir = 0;break;
+			case Cmd::inc_ir: ++ir;break;
+			case Cmd::set_var_ir_1: set_var_parampack(vm,load_int1());break;
+			case Cmd::set_var_ir_2: set_var_parampack(vm,load_int2());break;
+			case Cmd::set_var_arr_ir_1: set_var_arr_parampack(vm,load_int1());break;
+			case Cmd::set_var_arr_ir_2: set_var_arr_parampack(vm,load_int2());break;
+			case Cmd::set_var_1: set_var(vm,load_int1());break;
+			case Cmd::set_var_2: set_var(vm,load_int2());break;
+			case Cmd::op_add: bin_op(vm,op_add);break;
+			case Cmd::op_sub: bin_op(vm,op_sub);break;
+			case Cmd::op_mult: bin_op(vm,op_mult);break;
+			case Cmd::op_div: bin_op(vm,op_div);break;
+			case Cmd::op_cmp_eq: op_cmp(vm,[](int x){return x == 0;});break;
+			case Cmd::op_cmp_less: op_cmp(vm,[](int x){return x < 0;});break;
+			case Cmd::op_cmp_greater: op_cmp(vm,[](int x){return x > 0;});break;
+			case Cmd::op_cmp_less_eq: op_cmp(vm,[](int x){return x <= 0;});break;
+			case Cmd::op_cmp_greater_eq: op_cmp(vm,[](int x){return x >= 0;});break;
+			case Cmd::op_cmp_not_eq: op_cmp(vm,[](int x){return x != 0;});break;
+			case Cmd::op_bool_and: bin_op(vm,op_and);break;
+			case Cmd::op_bool_or: bin_op(vm,op_or);break;
+			case Cmd::op_bool_not: unar_op(vm,op_not);break;
+			case Cmd::op_power: bin_op(vm,op_power);break;
+			case Cmd::jump_1: ip+=load_int1();break;
+			case Cmd::jump_2: ip+=load_int2();break;
+			case Cmd::jump_true_1: ip+=load_int1() * (vm.pop_value().getBool()?1:0);break;
+			case Cmd::jump_true_2: ip+=load_int2() * (vm.pop_value().getBool()?1:0);break;
+			case Cmd::jump_false_1: ip+=load_int1() * (vm.pop_value().getBool()?0:1);break;
+			case Cmd::jump_false_2: ip+=load_int2() * (vm.pop_value().getBool()?0:1);break;
+			case Cmd::exit_block: ip = block.code.size();break;
+			case Cmd::dbg_inc_line_1: line+=load_int1();break;
+			case Cmd::dbg_inc_line_2: line+=load_int2();break;
+			case Cmd::push_false: vm.push_value(false);break;
+			case Cmd::push_true: vm.push_value(true);break;
+			case Cmd::push_null: vm.push_value(nullptr);break;
+			case Cmd::push_this: vm.push_value(vm.get_this());break;
+			case Cmd::push_undefined: vm.push_value(json::undefined);break;
+			case Cmd::op_unary_minus: unar_op(vm, op_unar_minus);break;
+			case Cmd::push_array_1: do_push_array(vm, load_int1());break;
+			case Cmd::push_array_2: do_push_array(vm, load_int2());break;
+			case Cmd::push_array_4: do_push_array(vm, load_int4());break;
+			default: invalid_instruction(vm,cmd);
+		}
+		return true;
+	} catch (...) {
+		vm.raise(std::current_exception());
+		return true;
 	}
-	return true;
 }
 
 
@@ -158,22 +166,45 @@ void BlockExecution::getVar(VirtualMachine &vm, std::intptr_t idx) {
 }
 
 void BlockExecution::deref(VirtualMachine &vm, Value idx) {
-	Value z = vm.pop_value();
-	switch (idx.type()) {
-	case json::number: vm.push_value(z[idx.getUInt()]);break;
-	case json::string: vm.push_value(z[idx.getString()]);break;
-	default: invalid_dereference(vm, idx);break;
+	try {
+		Value z = vm.pop_value();
+		vm.push_value(do_deref(z, idx));
+	} catch (...) {
+		vm.raise(std::current_exception());
 	}
 }
 
+Value BlockExecution::do_deref(const Value where, const Value &what) {
+	switch (what.type()) {
+		case json::number: return  where[what.getUInt()];break;
+		case json::string: return  where[what.getString()];break;
+		default: throw InvalidDereference(what);
+	}
+
+}
+
+void BlockExecution::deref_fn(VirtualMachine &vm, Value idx) {
+	try {
+		Value z = vm.pop_value();
+		auto className = strTypeClasses[z.type()];
+
+		Value x;
+		if (vm.get_var(className, x)) {
+			x = do_deref(x, idx);
+		} else {
+			x = do_deref(x, idx);
+			if (!x.defined()) {
+				x = do_deref(z,idx);
+			}
+		}
+		vm.push_value(x);
+	} catch (...) {
+		vm.raise(std::current_exception());
+	}
+}
 
 void BlockExecution::call_fn(VirtualMachine &vm, std::intptr_t param_pack_size) {
 	Value fn = vm.pop_value();
-	if (!isFunction(fn)) {
-		argument_is_not_function(vm, fn);
-	} else {
-		vm.call_function_raw(fn, param_pack_size);
-	}
 }
 
 
@@ -356,17 +387,6 @@ void InvalidDereference::what(std::string &out) const {
 	out.append("'");
 }
 
-void ArgumentIsNotFunction::what(std::string &out) const {
-	out.append("Argument is not a function: '");
-	idx.serialize([&](char c){out.push_back(c);});
-	out.append("'");
-}
-
-void ArgumentIsNotBlock::what(std::string &out) const {
-	out.append("Argument is not a block: '");
-	idx.serialize([&](char c){out.push_back(c);});
-	out.append("'");
-}
 
 void BlockExecution::do_push_array(VirtualMachine &vm, std::intptr_t count) {
 	vm.define_param_pack(count);

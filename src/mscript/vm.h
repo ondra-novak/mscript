@@ -184,6 +184,10 @@ public:
 
 	bool set_var(const std::string_view &name, const Value &value);
 	bool get_var(const std::string_view &name, Value &value);
+	///"this" is defined as scope object one level below current scope
+	Value get_this();
+	///"scope_base" is defined as base object of current scope
+	Value get_scope_base() const;
 
 
 	///Add new task to TaskStack. The task will continue to run on next run()
@@ -209,7 +213,7 @@ public:
 	std::optional<CodeLocation> getCodeLocation() const;
 
 	///When machine stops because exception, this returns code location of the exception
-	std::optional<CodeLocation> getExceptionCodeLocation() const;
+	std::vector<CodeLocation> getExceptionCodeLocation() const;
 
 	///Passes arguments to stack and calls function
 	/**
@@ -241,7 +245,7 @@ protected:
 	Value globalScope;
 	std::size_t paramPack = 0;
 	std::exception_ptr exp = nullptr;
-	std::optional<CodeLocation> exp_location;
+	std::vector<CodeLocation> exp_location;
 
 	template<typename ... Args>
 	void push_arguments(const Value &v, const Args & ... args) {

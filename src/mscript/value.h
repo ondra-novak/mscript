@@ -8,7 +8,9 @@
 #ifndef SRC_MSCRIPT_VALUE_H_
 #define SRC_MSCRIPT_VALUE_H_
 
+
 #include <imtjson/wrap.h>
+#include <imtjson/namedEnum.h>
 
 namespace mscript {
 
@@ -20,6 +22,15 @@ static inline bool isNativeType(const Value &val, const std::type_info &type) {
 	if (wp == nullptr) return false;
 	return wp->cast(type) != nullptr;
 }
+
+static inline bool isNativeType(const Value &val) {
+	const json::_details::IWrap *wp = dynamic_cast<const json::_details::IWrap *>(static_cast<const json::IValue *>(val.getHandle()));
+	return (wp != nullptr);
+}
+
+extern json::NamedEnum<json::ValueType> strTypeClasses;
+
+
 
 }
 
