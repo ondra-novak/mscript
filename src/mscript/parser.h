@@ -145,6 +145,7 @@ public:
 					default: return {Symbol::s_dot};
 				};break;
 				case ';': return {Symbol::s_semicolon};
+				case ':': return {Symbol::s_doublecolon};
 				case ',': return {Symbol::s_comma};
 				case '[': return {Symbol::s_left_square_bracket};
 				case ']': return {Symbol::s_right_square_bracket};

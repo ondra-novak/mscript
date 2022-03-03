@@ -88,6 +88,19 @@ enum class Cmd:std::uint8_t{
 	op_unary_minus,
 	op_mod,
 
+	op_add_const_1,
+	op_add_const_2,
+	op_add_const_4,
+	op_add_const_8,
+	op_negadd_const_1,
+	op_negadd_const_2,
+	op_negadd_const_4,
+	op_negadd_const_8,
+	op_mult_const_1,
+	op_mult_const_2,
+	op_mult_const_4,
+	op_mult_const_8,
+
 	/// jumps
 
 	jump_1,			///<relative jump 1 byte
@@ -175,6 +188,7 @@ protected:
 	void bin_op(VirtualMachine &vm, Value (*fn)(const Value &a, const Value &b));
 	void unar_op(VirtualMachine &vm, Value (*fn)(const Value &a));
 	void op_cmp(VirtualMachine &vm, bool (*fn)(int z));
+	void bin_op_const(VirtualMachine &vm, std::int64_t val, Value (*fn)(const Value &a, const Value &b));
 
 	void expand_param_pack(VirtualMachine &, std::intptr_t amount);
 
@@ -191,6 +205,7 @@ protected:
 	static Value op_add(const Value &a, const Value &b);
 	static Value op_sub(const Value &a, const Value &b);
 	static Value op_mult(const Value &a, const Value &b);
+	static Value op_mod(const Value &a, const Value &b);
 	static Value op_div(const Value &a, const Value &b);
 	static Value op_and(const Value &a, const Value &b);
 	static Value op_or(const Value &a, const Value &b);

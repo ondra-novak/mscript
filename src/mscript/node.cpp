@@ -134,10 +134,14 @@ void SingleParamPackNode::moveTo(std::vector<PNode> &nodes) {
 NumberNode::NumberNode(Value n):n(n) {}
 
 void NumberNode::generateExpression(BlockBld &blk) const {
-	blk.pushCmd(Cmd::push_double);
-	double v = n.getNumber();
-	auto vptr = reinterpret_cast<const std::uint8_t *>(&v);
-	for (std::size_t i = 0; i < 8;i++) blk.code.push_back(vptr[i]);
+	if (n.flags() & (json::numberInteger|json::numberUnsignedInteger)) {
+		blk.pushInt(n.getIntLong(), Cmd::push_int_1);
+	} else {
+		blk.pushCmd(Cmd::push_double);
+		double v = n.getNumber();
+		auto vptr = reinterpret_cast<const std::uint8_t *>(&v);
+		for (std::size_t i = 0; i < 8;i++) blk.code.push_back(vptr[i]);
+	}
 }
 
 FunctionCall::FunctionCall(PNode &&fn, PParamPackNode &&paramPack):fn(std::move(fn)),paramPack(std::move(paramPack)) {
@@ -199,7 +203,9 @@ std::size_t EmptyParamPackNode::count() const {
 
 void AbstractParamPackNode::generateExpression(BlockBld &blk) const {
 	generateUnclosedExpression(blk);
-	blk.pushInt(count(), infinite?Cmd::expand_param_pack_1:Cmd::def_param_pack_1);
+	if (count() != 1) {
+		blk.pushInt(count(), infinite?Cmd::expand_param_pack_1:Cmd::def_param_pack_1);
+	}
 
 }
 
@@ -489,6 +495,10 @@ public:
 	}
 	virtual bool run(mscript::VirtualMachine &vm) {
 		if (pos) {									//if (pos != 0) - not first cycle
+			if (pos >= max_cnt) {
+				vm.pop_scope();
+				return false;
+			}
 			vm.del_value();
 			prevScope = vm.scope_to_object();
 			vm.pop_scope();
@@ -639,7 +649,12 @@ void BooleanAndOrNode::generateListVars(VarSet &vars) const {
 
 void ForLoopNode::generateListVars(VarSet &vars) const {
 	container->generateListVars(vars);
-	block->generateListVars(vars);
+	const BlockValueNode *bvn = dynamic_cast<const BlockValueNode *>(block.get());
+
+	if (bvn) bvn->generateListVars(vars);
+	else vars.insert(nullptr);
+
+
 	for (const auto &x: init) x.second->generateListVars(vars);
 }
 
@@ -660,6 +675,71 @@ BlockValueNode::BlockValueNode(Value n, PNode &&blockTree):ValueNode(n),blockTre
 
 const PNode& BlockValueNode::getBlockTree() const {
 	return blockTree;
+}
+
+
+
+void BinaryConstOperation::generateExpression(BlockBld &blk) const {
+	auto vl = dynamic_cast<const NumberNode *>(left.get());
+	auto vr = dynamic_cast<const NumberNode *>(right.get());
+	if (vl) {
+		const Value &n = vl->getValue();
+		if (n.flags() & (json::numberInteger|json::numberUnsignedInteger)) {
+			generateExpression(blk, n.getIntLong(), right);
+			return;
+		}
+	}
+	if (vr) {
+		const Value &n = vr->getValue();
+		if (n.flags() & (json::numberInteger|json::numberUnsignedInteger)) {
+			generateExpression(blk, left, n.getIntLong());
+			return;
+		}
+
+	}
+	BinaryOperation::generateExpression(blk);
+}
+
+OpAddNode::OpAddNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move(left),std::move(right), Cmd::op_add) {
+}
+
+void OpAddNode::generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const {
+	right->generateExpression(blk);
+	blk.pushInt(n, Cmd::op_add_const_1);
+}
+
+void OpAddNode::generateExpression(BlockBld &blk, const PNode &left, std::int64_t n) const {
+	left->generateExpression(blk);
+	blk.pushInt(n, Cmd::op_add_const_1);
+}
+
+OpSubNode::OpSubNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move(left),std::move(right), Cmd::op_sub) {
+}
+
+void OpSubNode::generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const {
+	right->generateExpression(blk);
+	blk.pushInt(n, Cmd::op_negadd_const_1);
+
+}
+
+void OpSubNode::generateExpression(BlockBld &blk, const PNode &left, std::int64_t n) const {
+	left->generateExpression(blk);
+	blk.pushInt(-n, Cmd::op_add_const_1);
+}
+
+OpMultNode::OpMultNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move(left),std::move(right), Cmd::op_mult) {
+}
+
+void OpMultNode::generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const {
+	right->generateExpression(blk);
+	blk.pushInt(n, Cmd::op_mult_const_1);
+
+}
+
+void OpMultNode::generateExpression(BlockBld &blk, const PNode &left, std::int64_t n) const {
+	left->generateExpression(blk);
+	blk.pushInt(n, Cmd::op_mult_const_1);
+
 }
 
 }

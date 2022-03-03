@@ -38,8 +38,8 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::deref_2,"DEREF @2"},
 	{Cmd::deref_fn_1,"DEREF_FN @1"},
 	{Cmd::deref_fn_2,"DEREF_FN @2"},
-	{Cmd::call_fn_1,"CALL $1"},
-	{Cmd::call_fn_2,"CALL $2"},
+	{Cmd::call_fn_1,"CALL ($1...)"},
+	{Cmd::call_fn_2,"CALL ($2...)"},
 	{Cmd::exec_block,"EXEC"},
 	{Cmd::push_scope,"PUSH_SCOPE"},
 	{Cmd::pop_scope,"POP_SCOPE"},
@@ -83,6 +83,18 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::exit_block,"EXIT"},
 	{Cmd::is_def_1,"ISDEF @1"},
 	{Cmd::is_def_2,"ISDEF @2"},
+	{Cmd::op_add_const_1,"ADD $1"},
+	{Cmd::op_add_const_2,"ADD $2"},
+	{Cmd::op_add_const_4,"ADD $4"},
+	{Cmd::op_add_const_8,"ADD $8"},
+	{Cmd::op_negadd_const_1,"NEGADD $1"},
+	{Cmd::op_negadd_const_2,"NEGADD $2"},
+	{Cmd::op_negadd_const_4,"NEGADD $4"},
+	{Cmd::op_negadd_const_8,"NEGADD $8"},
+	{Cmd::op_mult_const_1,"MULT $1"},
+	{Cmd::op_mult_const_2,"MULT $2"},
+	{Cmd::op_mult_const_4,"MULT $4"},
+	{Cmd::op_mult_const_8,"MULT $8"},
 
 
 });
@@ -147,6 +159,7 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::op_sub: bin_op(vm,op_sub);break;
 			case Cmd::op_mult: bin_op(vm,op_mult);break;
 			case Cmd::op_div: bin_op(vm,op_div);break;
+			case Cmd::op_mod: bin_op(vm,op_mod);break;
 			case Cmd::op_cmp_eq: op_cmp(vm,[](int x){return x == 0;});break;
 			case Cmd::op_cmp_less: op_cmp(vm,[](int x){return x < 0;});break;
 			case Cmd::op_cmp_greater: op_cmp(vm,[](int x){return x > 0;});break;
@@ -175,6 +188,18 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::push_array_4: do_push_array(vm, load_int4());break;
 			case Cmd::is_def_1: do_isdef(vm, load_int1());break;
 			case Cmd::is_def_2: do_isdef(vm, load_int2());break;
+			case Cmd::op_add_const_1: bin_op_const(vm, load_int1(), op_add);break;
+			case Cmd::op_add_const_2: bin_op_const(vm, load_int2(), op_add);break;
+			case Cmd::op_add_const_4: bin_op_const(vm, load_int4(), op_add);break;
+			case Cmd::op_add_const_8: bin_op_const(vm, load_int8(), op_add);break;
+			case Cmd::op_negadd_const_1: unar_op(vm,op_unar_minus);bin_op_const(vm, load_int1(), op_add);break;
+			case Cmd::op_negadd_const_2: unar_op(vm,op_unar_minus);bin_op_const(vm, load_int2(), op_add);break;
+			case Cmd::op_negadd_const_4: unar_op(vm,op_unar_minus);bin_op_const(vm, load_int4(), op_add);break;
+			case Cmd::op_negadd_const_8: unar_op(vm,op_unar_minus);bin_op_const(vm, load_int8(), op_add);break;
+			case Cmd::op_mult_const_1: bin_op_const(vm, load_int1(), op_mult);break;
+			case Cmd::op_mult_const_2: bin_op_const(vm, load_int2(), op_mult);break;
+			case Cmd::op_mult_const_4: bin_op_const(vm, load_int4(), op_mult);break;
+			case Cmd::op_mult_const_8: bin_op_const(vm, load_int8(), op_mult);break;
 			default: invalid_instruction(vm,cmd);
 		}
 		return true;
@@ -250,6 +275,12 @@ void BlockExecution::deref(VirtualMachine &vm, Value idx) {
 	}
 }
 
+void BlockExecution::bin_op_const(VirtualMachine &vm, std::int64_t val, Value (*fn)(const Value &a, const Value &b)) {
+	Value z = vm.pop_value();
+	vm.push_value(fn(z,val));
+}
+
+
 Value BlockExecution::do_deref(const Value where, const Value &what) {
 	switch (what.type()) {
 		case json::number: return  where[what.getUInt()];break;
@@ -281,6 +312,7 @@ void BlockExecution::deref_fn(VirtualMachine &vm, Value idx) {
 
 void BlockExecution::call_fn(VirtualMachine &vm, std::intptr_t param_pack_size) {
 	Value fn = vm.pop_value();
+	vm.call_function_raw(fn, param_pack_size);
 }
 
 
@@ -361,7 +393,13 @@ Value BlockExecution::op_add(const Value &a, const Value &b) {
 	switch (a.type()) {
 		case json::undefined: return json::undefined;
 		case json::boolean: return a.getBool() || b.getBool();
-		case json::number: return a.getNumber()+b.getNumber();
+		case json::number:
+			if ((a.flags() & (json::numberInteger| json::numberUnsignedInteger))
+					&& (b.flags() & (json::numberInteger| json::numberUnsignedInteger))) {
+				return a.getIntLong()+b.getIntLong();
+			} else {
+				return a.getNumber()+b.getNumber();
+			}
 		case json::string: return json::String({a.toString(),b.toString()});
 		case json::array: return a.merge(b);
 		case json::object: return a.merge(b);
@@ -375,7 +413,13 @@ Value BlockExecution::op_sub(const Value &a, const Value &b) {
 	switch (a.type()) {
 		case json::undefined: return json::undefined;
 		case json::boolean: return a.getBool() || (!b.getBool());
-		case json::number: return a.getNumber()-b.getNumber();
+		case json::number:
+			if ((a.flags() & (json::numberInteger| json::numberUnsignedInteger))
+					&& (b.flags() & (json::numberInteger| json::numberUnsignedInteger))) {
+				return a.getIntLong()-b.getIntLong();
+			} else {
+				return a.getNumber()-b.getNumber();
+			}
 		case json::string: {
 			auto pos = a.getString().find(b.getString());
 			if (pos == a.getString().npos) return a;
@@ -391,7 +435,14 @@ Value BlockExecution::op_mult(const Value &a, const Value &b) {
 	switch (a.type()) {
 		case json::undefined: return json::undefined;
 		case json::boolean: return a.getBool() && b.getBool();
-		case json::number: return a.getNumber() * b.getNumber();
+		case json::number:
+			if ((a.flags() & (json::numberInteger| json::numberUnsignedInteger))
+					&& (b.flags() & (json::numberInteger| json::numberUnsignedInteger))) {
+				return a.getIntLong() * b.getIntLong();
+			} else {
+				return a.getNumber() * b.getNumber();
+			}
+
 		default: return nullptr;
 	}
 	return a;
@@ -402,7 +453,25 @@ Value BlockExecution::op_div(const Value &a, const Value &b) {
 	switch (a.type()) {
 		case json::undefined: return json::undefined;
 		case json::boolean: return a.getBool() && !b.getBool();
-		case json::number: return a.getNumber() * b.getNumber();
+		case json::number: return a.getNumber() / b.getNumber();
+		default: return nullptr;
+	}
+	return a;
+}
+
+Value BlockExecution::op_mod(const Value &a, const Value &b) {
+	if (!b.hasValue()) return b;
+	switch (a.type()) {
+		case json::undefined: return json::undefined;
+		case json::boolean: return a.getBool() && !b.getBool();
+		case json::number:
+			if ((a.flags() & (json::numberInteger| json::numberUnsignedInteger))
+					&& (b.flags() & (json::numberInteger| json::numberUnsignedInteger))) {
+				return a.getIntLong() % b.getIntLong();
+			} else {
+				return std::fmod(a.getNumber(),b.getNumber());
+			}
+
 		default: return nullptr;
 	}
 	return a;

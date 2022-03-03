@@ -89,7 +89,7 @@ static int showcode(CmdArgIter &iter) {
 		case Block::DisEvent::end_block: std::cout<<std::endl<<"End of block: " << number << std::endl<<std::endl;break;
 		case Block::DisEvent::begin_fn: std::cout<<std::endl<<"Function: " << number << "  " << text << "=>" << std::endl<<std::endl;break;
 		case Block::DisEvent::end_fn: std::cout<<std::endl<<"End function: " << number << std::endl<<std::endl;break;
-		case Block::DisEvent::location: std::cout<<std::endl<<"Code location: " << text << ":" << number << std::endl;break;
+		case Block::DisEvent::location: std::cout<<"Code location: " << text << ":" << number << std::endl<< std::endl;break;
 		};
 	});
 

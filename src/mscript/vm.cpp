@@ -132,7 +132,7 @@ bool VirtualMachine::pop_scope() {
 
 Value Scope::operator [](const std::string_view &name) const {
 	auto iter = items.find(name);
-	if (iter == items.end()) return json::undefined;
+	if (iter == items.end()) return base[name];
 	else return iter->second;
 }
 

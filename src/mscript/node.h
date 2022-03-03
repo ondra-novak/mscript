@@ -61,6 +61,34 @@ namespace mscript {
 		Cmd instruction;
 	};
 
+	class BinaryConstOperation: public BinaryOperation {
+	public:
+		using BinaryOperation::BinaryOperation;
+		virtual void generateExpression(BlockBld &blk) const;
+		virtual void generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const = 0;
+		virtual void generateExpression(BlockBld &blk, const PNode &left, std::int64_t n)  const= 0;
+	};
+
+	class OpAddNode: public BinaryConstOperation {
+	public:
+		OpAddNode(PNode &&left, PNode &&right);
+		virtual void generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const override;
+		virtual void generateExpression(BlockBld &blk, const PNode &left, std::int64_t n)  const override;
+	};
+	class OpSubNode: public BinaryConstOperation {
+	public:
+		OpSubNode(PNode &&left, PNode &&right);
+		virtual void generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const override;
+		virtual void generateExpression(BlockBld &blk, const PNode &left, std::int64_t n)  const override;
+	};
+	class OpMultNode: public BinaryConstOperation {
+	public:
+		OpMultNode(PNode &&left, PNode &&right);
+		virtual void generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const override;
+		virtual void generateExpression(BlockBld &blk, const PNode &left, std::int64_t n)  const override;
+	};
+
+
 	class UnaryOperation: public Expression {
 	public:
 		UnaryOperation(PNode &&item, Cmd instruction);
@@ -94,6 +122,7 @@ namespace mscript {
 	public:
 		NumberNode(Value n);
 		virtual void generateExpression(BlockBld &blk) const override;
+		const Value &getValue() const {return n;}
 	protected:
 		Value n;
 	};
@@ -102,6 +131,7 @@ namespace mscript {
 	public:
 		ValueNode(Value n);
 		virtual void generateExpression(BlockBld &blk) const override;
+		const Value &getValue() const {return n;}
 	protected:
 		Value n;
 	};

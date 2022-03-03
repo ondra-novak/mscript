@@ -54,7 +54,7 @@ void Compiler::sync(const Symbol &symbol) {
 	if (exp.symbol == symbol) {
 		commit();
 	} else {
-		throw std::runtime_error(std::string("Expected symbol: ").append(strKeywords[exp.symbol]));
+		throw std::runtime_error(std::string("Expected symbol: `").append(strKeywords[symbol]).append("`, found:`").append(strKeywords[exp.symbol]).append("`"));
 	}
 
 }
@@ -203,12 +203,12 @@ PNode Compiler::parseValue() {
 		break;
 	case Symbol::kw_for:
 		commit();
-		sync(Symbol::s_right_bracket);
+		sync(Symbol::s_left_bracket);
 		out = compileFor();
 		break;
 	case Symbol::kw_while:
 		commit();
-		sync(Symbol::s_right_bracket);
+		sync(Symbol::s_left_bracket);
 		out = compileWhile();
 		break;
 	case Symbol::kw_this:
@@ -351,9 +351,10 @@ PNode Compiler::compileBlockContent() {
 					lastLine = curLine;
 					//TODO map of lines
 				}*/
+			} else {
+				clear = false;
 			}
 		} else {
-			clear = false;
 			commit();
 		}
 		s = next();
@@ -521,21 +522,25 @@ PNode Compiler::compileCompare() {
 
 PNode Compiler::compileAddSub() {
 	PNode nd = compileMultDiv();
-	Cmd cmd;
+
 	switch(next().symbol) {
-	case Symbol::s_plus: cmd = Cmd::op_add; break;
-	case Symbol::s_minus: cmd = Cmd::op_sub; break;
+	case Symbol::s_plus:
+		commit();
+		return std::make_unique<OpAddNode>(std::move(nd), compileAddSub());
+	case Symbol::s_minus:
+		commit();
+		return std::make_unique<OpSubNode>(std::move(nd), compileAddSub());
 	default: return nd;
 	}
-	commit();
-	return std::make_unique<BinaryOperation>(std::move(nd), compileAddSub(), cmd);
 }
 
 PNode Compiler::compileMultDiv() {
 	PNode nd = compilePower();
 	Cmd cmd;
 	switch(next().symbol) {
-	case Symbol::s_star: cmd = Cmd::op_mult; break;
+	case Symbol::s_star:
+		commit();
+		return std::make_unique<OpMultNode>(std::move(nd), compileMultDiv());
 	case Symbol::s_slash: cmd = Cmd::op_div; break;
 	case Symbol::s_percent: cmd = Cmd::op_mod; break;
 	default: return nd;
