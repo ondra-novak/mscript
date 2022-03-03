@@ -1,3 +1,4 @@
+#include <imtjson/string.h>
 #include <mscript/function.h>
 #include "node.h"
 #include <cmath>
@@ -26,15 +27,16 @@ Assignment::Assignment(PNode &&assignment, PNode &&expression)
 :assignment(std::move(assignment)),expression(std::move(expression)) {}
 
 void Assignment::generateExpression(BlockBld &blk) const {
+	expression->generateExpression(blk);
 	assignment->generateExpression(blk);
-	assignment->generateAssign(blk);
 }
 
 Identifier::Identifier(Value name):name(name) {}
 
+/*
 void Identifier::generateAssign(BlockBld &blk) const {
 	blk.pushInt(blk.pushConst(name), Cmd::set_var_1);
-}
+}*/
 
 void Identifier::generateExpression(BlockBld &blk) const {
 	blk.pushInt(blk.pushConst(name), Cmd::get_var_1);
@@ -51,29 +53,6 @@ ParamPackNode::ParamPackNode(PNode &&current, PNode &&nw) {
 	}
 }
 
-void AbstractParamPackNode::makeAssign(BlockBld &blk, const PNode &n, bool arr) {
-	const Underscore *itm = dynamic_cast<const Underscore *>(n.get());
-	if (itm == nullptr) {
-		const Identifier *itm = dynamic_cast<const Identifier *>(n.get());
-		if (itm == nullptr) {
-			throw std::runtime_error("Invalid assignment expression");
-		} else {
-			blk.pushInt(blk.pushConst(itm->getName()), arr?Cmd::set_var_arr_ir_1:Cmd::set_var_ir_1);
-		}
-	}
-}
-
-void ParamPackNode::generateAssign(BlockBld &blk) const {
-	auto iter = nodes.begin();
-	auto end = nodes.end();
-	while (true) {
-		makeAssign(blk,*iter, this->infinite && iter+1 == end);
-		++iter;
-		if (iter == end) break;
-		blk.pushCmd(Cmd::inc_ir);
-	}
-
-}
 
 
 void ParamPackNode::generateUnclosedExpression(BlockBld &blk) const {
@@ -85,6 +64,7 @@ void ParamPackNode::generateUnclosedExpression(BlockBld &blk) const {
 
 
 void BlockBld::pushInt(std::intptr_t val, Cmd cmd) {
+	if (cmd == Cmd::set_var_1) lastStorePos = code.size(); else lastStorePos = 0;
 	if (val >= -128 && val < 128) {
 		code.push_back(static_cast<std::uint8_t>(cmd));
 		code.push_back(static_cast<std::uint8_t>(val));
@@ -125,17 +105,14 @@ std::intptr_t BlockBld::pushConst(Value v) {
 	return r.first->second;
 }
 
+void Identifier::generateListVars(VarSet &vars) const {
+	vars.insert(name);
+}
+
 Value Identifier::getName() const {
 	return name;
 }
 
-void Underscore::generateAssign(BlockBld &blk) const {
-	// nothing, can't assign to underscore
-}
-
-void Underscore::generateExpression(BlockBld &blk) const {
-	throw std::runtime_error("Invalid identifier - '_' can be used in expression");
-}
 
 void ParamPackNode::moveTo(std::vector<PNode> &nodes) {
 	for (PNode &n : this->nodes) {
@@ -145,10 +122,6 @@ void ParamPackNode::moveTo(std::vector<PNode> &nodes) {
 
 SingleParamPackNode::SingleParamPackNode(PNode &&n):n(std::move(n)) {}
 
-void SingleParamPackNode::generateAssign(BlockBld &blk) const {
-	blk.pushCmd(Cmd::reset_ir);
-	makeAssign(blk, n, this->infinite);
-}
 
 void SingleParamPackNode::generateUnclosedExpression(BlockBld &blk) const {
 	n->generateExpression(blk);
@@ -170,6 +143,10 @@ void NumberNode::generateExpression(BlockBld &blk) const {
 FunctionCall::FunctionCall(PNode &&fn, PParamPackNode &&paramPack):fn(std::move(fn)),paramPack(std::move(paramPack)) {
 }
 
+void FunctionCall::generateListVars(VarSet &vars) const {
+	fn->generateListVars(vars);
+}
+
 void FunctionCall::generateExpression(BlockBld &blk) const {
 	paramPack->generateExpression(blk);
 	fn->generateExpression(blk);
@@ -182,24 +159,37 @@ void ValueNode::generateExpression(BlockBld &blk) const {
 	blk.pushInt(blk.pushConst(n), Cmd::push_const_1);
 }
 
+void ParamPackNode::generateListVars(VarSet &vars) const {
+	for (const auto &x: nodes) x->generateListVars(vars);
+}
+
 std::size_t ParamPackNode::count() const {
 	return nodes.size();
 }
 
+void SingleParamPackNode::generateListVars(VarSet &vars) const {
+	n->generateListVars(vars);
+}
 
 std::size_t SingleParamPackNode::count() const {
 	return 1;
 }
 
+/*
 void EmptyParamPackNode::generateAssign(BlockBld &blk) const {
 	//empty - can't assign to single param pack
 }
+*/
 
 void EmptyParamPackNode::generateUnclosedExpression(BlockBld &blk) const {
 	//empty
 }
 
 void EmptyParamPackNode::moveTo(std::vector<PNode> &nodes) {
+	//empty
+}
+
+void EmptyParamPackNode::generateListVars(VarSet &vars) const {
 	//empty
 }
 
@@ -213,46 +203,54 @@ void AbstractParamPackNode::generateExpression(BlockBld &blk) const {
 
 }
 
-DirectCmdNode::DirectCmdNode(Cmd cmd) {
+DirectCmdNode::DirectCmdNode(Cmd cmd):cmd(cmd) {
 }
 
 void DirectCmdNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(cmd);
 }
 
-KwWithNode::KwWithNode(PNode &&nd_object, PNode &&nd_block):nd_object(std::move(nd_object)),nd_block(std::move(nd_block)) {}
+ExecNode::ExecNode(PNode &&nd_block):nd_block(std::move(nd_block)) {}
+
+void ExecNode::generateExpression(BlockBld &blk) const {
+	const BlockValueNode *bvn = dynamic_cast<const BlockValueNode *>(nd_block.get());
+	if (bvn) {
+		bvn->getBlockTree()->generateExpression(blk);
+	} else {
+		nd_block->generateExpression(blk);
+		blk.pushCmd(Cmd::exec_block);
+	}
+}
+
+
+KwWithNode::KwWithNode(PNode &&nd_object, PNode &&nd_block):ExecNode(std::move(nd_block)),nd_object(std::move(nd_object)) {}
 
 void KwWithNode::generateExpression(BlockBld &blk) const {
-	nd_block->generateExpression(blk);
 	nd_object->generateExpression(blk);
 	blk.pushCmd(Cmd::push_scope_object);
-	blk.pushCmd(Cmd::exec_block);
+	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::pop_scope);
 }
 
-KwExecNode::KwExecNode(PNode &&nd_block):nd_block(std::move(nd_block)) {}
 
 void KwExecNode::generateExpression(BlockBld &blk) const {
-	nd_block->generateExpression(blk);
 	blk.pushCmd(Cmd::push_scope);
-	blk.pushCmd(Cmd::exec_block);
+	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::pop_scope);
 }
 
 void KwExecObjectNode::generateExpression(BlockBld &blk) const {
-	nd_block->generateExpression(blk);   //<block>
 	nd_object->generateExpression(blk);  //<block> <object>
 	blk.pushCmd(Cmd::push_scope_object); //<block>    -> object to scope
-	blk.pushCmd(Cmd::exec_block);        //<exec return value>
+	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::del);			     //discard return value
 	blk.pushCmd(Cmd::scope_to_object);	 //convert scope to object <return value is object>
 	blk.pushCmd(Cmd::pop_scope);		 //pop scope
 }
 
 void KwExecNewObjectNode::generateExpression(BlockBld &blk) const {
-	nd_block->generateExpression(blk);
 	blk.pushCmd(Cmd::push_scope);
-	blk.pushCmd(Cmd::exec_block);
+	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::del);
 	blk.pushCmd(Cmd::scope_to_object);
 	blk.pushCmd(Cmd::pop_scope);
@@ -273,7 +271,7 @@ void IfElseNode::generateExpression(BlockBld &blk) const {
 	blk.code.push_back(0);				//reserve bytes
 	blk.code.push_back(0);				//reserve bytes
 	std::size_t lb3 = blk.code.size();	//mark code location
-	nd_else->generateExpression(blk);	//genrate else expression
+	nd_else->generateExpression(blk);	//generate else expression
 	std::size_t lb4 = blk.code.size();	//mark code location
 	auto dist1 = lb3-lb1-2;				//create relative distance (relative jump)
 	auto dist2 = lb4-lb2-2;				//create relative distance
@@ -374,12 +372,16 @@ protected:
 };
 
 
+std::unique_ptr<AbstractTask> UserFn::call(VirtualMachine &vm, Value closure) const  {
+	return std::make_unique<FunctionTask>(identifiers, code);
+}
+
+
 Value defineUserFunction(std::vector<std::string> &&identifiers, PNode &&body, const CodeLocation &loc) {
 	Value code = packToValue(buildCode(body, loc));
-
-	return defineFunction([identifiers = std::move(identifiers), code](VirtualMachine &vm, Value closure) -> std::unique_ptr<AbstractTask> {
-		return std::make_unique<FunctionTask>(identifiers, code);
-	});
+	auto ptr = std::make_unique<UserFn>(std::move(code), std::move(identifiers));
+	std::string name = "Function "+loc.file+":"+std::to_string(loc.line);
+	return packToValue(std::unique_ptr<AbstractFunction>(std::move(ptr)), name);
 }
 
 Block buildCode(const PNode &nd, const CodeLocation &loc) {
@@ -407,7 +409,13 @@ void BlockNode::generateExpression(BlockBld &blk) const {
 		(*iter)->generateExpression(blk);
 		++iter;
 		while (iter != end) {
-			blk.pushCmd(Cmd::del);
+			if (blk.lastStorePos) {
+				constexpr auto diff = static_cast<int>(Cmd::pop_var_1)-static_cast<int>(Cmd::set_var_1);
+				blk.code[blk.lastStorePos]+=diff;
+				blk.lastStorePos = 0;
+			} else {
+				blk.pushCmd(Cmd::del);
+			}
 			(*iter)->generateExpression(blk);
 			++iter;
 		}
@@ -545,11 +553,113 @@ void WhileLoopNode::generateExpression(BlockBld &blk) const {
 	blk.setInt2(lb2-lb3-2, lb3);
 }
 
-UpdateLineNode::UpdateLineNode(int amount):amount(amount) {
+
+SimpleAssignNode::SimpleAssignNode(Value ident):ident(ident) {
 }
 
-void UpdateLineNode::generateExpression(BlockBld &blk) const {
-	blk.pushInt(amount, Cmd::dbg_inc_line_1);
+void SimpleAssignNode::generateExpression(BlockBld &blk) const {
+	blk.pushInt(blk.pushConst(ident.toString()), Cmd::set_var_1);
+}
+
+PackAssignNode::PackAssignNode(std::vector<Value> &&idents):idents(std::move(idents)) {
+
+}
+
+void PackAssignNode::generateExpression(BlockBld &blk) const {
+	blk.pushInt(blk.pushConst(Value(json::array,
+			idents.begin(),
+			idents.end(),[](Value x){return x;})), Cmd::set_var_1);
+}
+
+void ConstantLeaf::generateListVars(VarSet &vars) const {
+	//empty
+}
+
+void BinaryOperation::generateListVars(VarSet &vars) const {
+	left->generateListVars(vars);
+	right->generateListVars(vars);
+}
+
+void UnaryOperation::generateListVars(VarSet &vars) const {
+	item->generateListVars(vars);
+}
+
+void Assignment::generateListVars(VarSet &vars) const {
+	expression->generateListVars(vars);
+}
+
+void ExecNode::generateListVars(VarSet &vars) const {
+	const BlockValueNode *bvn = dynamic_cast<const BlockValueNode *>(nd_block.get());
+	if (bvn) {
+		bvn->getBlockTree()->generateListVars(vars);
+	} else {
+		vars.insert(nullptr);
+	}
+}
+
+
+void KwWithNode::generateListVars(VarSet &vars) const {
+	ExecNode::generateListVars(vars);
+	nd_object->generateListVars(vars);
+}
+
+void IfElseNode::generateListVars(VarSet &vars) const {
+	cond->generateListVars(vars);
+	nd_then->generateListVars(vars);
+	nd_else->generateListVars(vars);
+}
+
+void IfOnlyNode::generateListVars(VarSet &vars) const {
+	cond->generateListVars(vars);
+	nd_then->generateListVars(vars);
+}
+
+void DerefernceDotNode::generateListVars(VarSet &vars) const {
+	left->generateListVars(vars);
+}
+
+void MethodCallNode::generateListVars(VarSet &vars) const {
+	left->generateListVars(vars);
+	pp->generateListVars(vars);
+
+}
+
+void BlockNode::generateListVars(VarSet &vars) const {
+	for (const auto &x: code) x->generateListVars(vars);
+}
+
+void PushArrayNode::generateListVars(VarSet &vars) const {
+	for (const auto &x: code) x->generateListVars(vars);
+}
+
+void BooleanAndOrNode::generateListVars(VarSet &vars) const {
+	left->generateListVars(vars);
+	right->generateListVars(vars);
+}
+
+void ForLoopNode::generateListVars(VarSet &vars) const {
+	container->generateListVars(vars);
+	block->generateListVars(vars);
+	for (const auto &x: init) x.second->generateListVars(vars);
+}
+
+void WhileLoopNode::generateListVars(VarSet &vars) const {
+	condition->generateListVars(vars);
+	block->generateListVars(vars);
+}
+
+IsDefinedNode::IsDefinedNode(Value ident):ident(ident) {
+}
+
+void IsDefinedNode::generateExpression(BlockBld &blk) const {
+	blk.pushInt(blk.pushConst(ident), Cmd::is_def_1);
+}
+
+BlockValueNode::BlockValueNode(Value n, PNode &&blockTree):ValueNode(n),blockTree(std::move(blockTree)) {
+}
+
+const PNode& BlockValueNode::getBlockTree() const {
+	return blockTree;
 }
 
 }

@@ -13,7 +13,86 @@
 
 namespace mscript {
 
+
+json::NamedEnum<Cmd> strCmd({
+	{Cmd::noop,"NOP"},
+	{Cmd::push_int_1,"PUSHI $1"},
+	{Cmd::push_int_2,"PUSHI $2"},
+	{Cmd::push_int_4,"PUSHI $4"},
+	{Cmd::push_int_8,"PUSHI $8"},
+	{Cmd::push_double,"PUSHF $F"},
+	{Cmd::push_const_1,"PUSHC @1"},
+	{Cmd::push_const_2,"PUSHC @2"},
+	{Cmd::def_param_pack_1,"PPACK $1"},
+	{Cmd::def_param_pack_2,"PPACK $2"},
+	{Cmd::expand_param_pack_1,"EXPAND $1"},
+	{Cmd::expand_param_pack_2,"EXPAND $2"},
+	{Cmd::collapse_param_pack,"COLLAPSE"},
+	{Cmd::dup,"DUP"},
+	{Cmd::del,"DEL"},
+	{Cmd::swap,"SWAP"},
+	{Cmd::get_var_1,"PUSH @1"},
+	{Cmd::get_var_2,"PUSH @2"},
+	{Cmd::deref,"DEREF"},
+	{Cmd::deref_1,"DEREF @1"},
+	{Cmd::deref_2,"DEREF @2"},
+	{Cmd::deref_fn_1,"DEREF_FN @1"},
+	{Cmd::deref_fn_2,"DEREF_FN @2"},
+	{Cmd::call_fn_1,"CALL $1"},
+	{Cmd::call_fn_2,"CALL $2"},
+	{Cmd::exec_block,"EXEC"},
+	{Cmd::push_scope,"PUSH_SCOPE"},
+	{Cmd::pop_scope,"POP_SCOPE"},
+	{Cmd::push_scope_object,"OBJ2SCOPE"},
+	{Cmd::scope_to_object,"SCOPE2OBJ"},
+	{Cmd::raise,"RAISE"},
+	{Cmd::push_true,"PUSH true"},
+	{Cmd::push_false,"PUSH false"},
+	{Cmd::push_null,"PUSH null"},
+	{Cmd::push_undefined,"PUSH undefined"},
+	{Cmd::push_this,"PUSH this"},
+	{Cmd::push_array_1,"MKARRAY $1"},
+	{Cmd::push_array_2,"MKARRAY $2"},
+	{Cmd::push_array_4,"MKARRAY $4"},
+	{Cmd::set_var_1,"STORE @1"},
+	{Cmd::set_var_2,"STORE @2"},
+	{Cmd::pop_var_1,"POP @1"},
+	{Cmd::pop_var_2,"POP @2"},
+	{Cmd::op_add,"ADD"},
+	{Cmd::op_sub,"SUB"},
+	{Cmd::op_mult,"MULT"},
+	{Cmd::op_div,"DIV"},
+	{Cmd::op_cmp_eq,"EQ"},
+	{Cmd::op_cmp_less,"LESS"},
+	{Cmd::op_cmp_greater,"GREATER"},
+	{Cmd::op_cmp_less_eq,"LESS_EQ"},
+	{Cmd::op_cmp_greater_eq,"GREATER_EQ"},
+	{Cmd::op_cmp_not_eq,"NOT_EQ"},
+	{Cmd::op_bool_and,"AND"},
+	{Cmd::op_bool_or,"OR"},
+	{Cmd::op_bool_not,"NOT"},
+	{Cmd::op_power,"POWER"},
+	{Cmd::op_unary_minus,"NEG"},
+	{Cmd::op_mod,"MOD"},
+	{Cmd::jump_1,"JMP ^1"},
+	{Cmd::jump_2,"JMP ^2"},
+	{Cmd::jump_true_1,"JTRUE ^1"},
+	{Cmd::jump_true_2,"JTRUE ^2"},
+	{Cmd::jump_false_1,"JFALSE ^1"},
+	{Cmd::jump_false_2,"JFALSE ^2"},
+	{Cmd::exit_block,"EXIT"},
+	{Cmd::is_def_1,"ISDEF @1"},
+	{Cmd::is_def_2,"ISDEF @2"},
+
+
+});
+
 BlockExecution::BlockExecution(Value block):block_value(block),block(getBlockFromValue(block)) {
+
+}
+
+BlockExecution::BlockExecution(const BlockExecution &other)
+:block_value(other.block_value),block(getBlockFromValue(other.block_value)) {
 
 }
 
@@ -60,14 +139,10 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::push_scope_object: vm.push_scope(vm.pop_value());break;
 			case Cmd::scope_to_object: vm.push_value(vm.scope_to_object());break;
 			case Cmd::raise:do_raise(vm);break;
-			case Cmd::reset_ir:ir = 0;break;
-			case Cmd::inc_ir: ++ir;break;
-			case Cmd::set_var_ir_1: set_var_parampack(vm,load_int1());break;
-			case Cmd::set_var_ir_2: set_var_parampack(vm,load_int2());break;
-			case Cmd::set_var_arr_ir_1: set_var_arr_parampack(vm,load_int1());break;
-			case Cmd::set_var_arr_ir_2: set_var_arr_parampack(vm,load_int2());break;
 			case Cmd::set_var_1: set_var(vm,load_int1());break;
 			case Cmd::set_var_2: set_var(vm,load_int2());break;
+			case Cmd::pop_var_1: set_var(vm,load_int1());vm.del_value();break;
+			case Cmd::pop_var_2: set_var(vm,load_int2());vm.del_value();break;
 			case Cmd::op_add: bin_op(vm,op_add);break;
 			case Cmd::op_sub: bin_op(vm,op_sub);break;
 			case Cmd::op_mult: bin_op(vm,op_mult);break;
@@ -89,8 +164,6 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::jump_false_1: ip+=load_int1() * (vm.pop_value().getBool()?0:1);break;
 			case Cmd::jump_false_2: ip+=load_int2() * (vm.pop_value().getBool()?0:1);break;
 			case Cmd::exit_block: ip = block.code.size();break;
-			case Cmd::dbg_inc_line_1: line+=load_int1();break;
-			case Cmd::dbg_inc_line_2: line+=load_int2();break;
 			case Cmd::push_false: vm.push_value(false);break;
 			case Cmd::push_true: vm.push_value(true);break;
 			case Cmd::push_null: vm.push_value(nullptr);break;
@@ -100,6 +173,8 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::push_array_1: do_push_array(vm, load_int1());break;
 			case Cmd::push_array_2: do_push_array(vm, load_int2());break;
 			case Cmd::push_array_4: do_push_array(vm, load_int4());break;
+			case Cmd::is_def_1: do_isdef(vm, load_int1());break;
+			case Cmd::is_def_2: do_isdef(vm, load_int2());break;
 			default: invalid_instruction(vm,cmd);
 		}
 		return true;
@@ -115,7 +190,8 @@ bool BlockExecution::exception(VirtualMachine &vm, std::exception_ptr e) {
 }
 
 std::optional<CodeLocation> BlockExecution::getCodeLocation() const {
-	return CodeLocation{block.location.file, block.location.line+line};
+	return std::optional<CodeLocation>();
+	//TODO: return CodeLocation{block.location.file, block.location.line+line};
 }
 
 std::intptr_t BlockExecution::load_int1() {
@@ -240,10 +316,26 @@ void BlockExecution::set_var_parampack(VirtualMachine &vm, std::intptr_t cindex)
 }
 
 void BlockExecution::set_var(VirtualMachine &vm, std::intptr_t cindex) {
-	Value v = vm.top_value();
-	auto name = block.consts[cindex].getString();
-	if (!vm.set_var(name, v)) {
-		variable_already_assigned(vm, name);
+	Value trg = block.consts[cindex];
+	if (trg.type() == json::array) {
+		auto args = vm.top_params();
+		int idx = 0;
+		for (Value x: trg) {
+			if (x.hasValue()) {
+				auto name = x.getString();
+				if (!vm.set_var(name, args[idx])) {
+					variable_already_assigned(vm, name);
+					return;
+				}
+			}
+			idx++;
+		}
+	} else {
+		Value v = vm.top_value();
+		auto name = block.consts[cindex].getString();
+		if (!vm.set_var(name, v)) {
+			variable_already_assigned(vm, name);
+		}
 	}
 }
 
@@ -428,6 +520,15 @@ Value BlockExecution::op_unar_minus(const Value &a) {
 	case json::string: return a.reverse();
 	case json::array: return a.reverse();
 	default: return a;
+	}
+}
+
+void BlockExecution::do_isdef(VirtualMachine &vm, std::intptr_t idx) {
+	if (vm.isComileTime()) {
+		vm.raise(std::make_exception_ptr(std::runtime_error("Compile time")));
+	} else {
+		Value dummy;
+		vm.push_value(vm.get_var(block.consts[idx].getString(), dummy));
 	}
 }
 

@@ -109,7 +109,6 @@ public:
 	struct VMState {
 		std::size_t values,scopes;
 		std::optional<std::vector<Value> >paramPack;
-
 	};
 
 
@@ -133,6 +132,8 @@ public:
 	 * @note if exception is not handled, virtual machine is stopped, exception can be received through get_exception
 	 */
 	void raise(std::exception_ptr e);
+
+
 
 	///Retrieves exception if code stopped because exception
 	/**
@@ -235,7 +236,13 @@ public:
 	bool call_function_raw(Value fnval, std::size_t argCnt);
 
 
+	bool isComileTime() const {
+		return comile_time;
+	}
 
+	void setComileTime(bool comileTime) {
+		comile_time = comileTime;
+	}
 
 protected:
 
@@ -255,6 +262,7 @@ protected:
 
 	void push_arguments() {}
 
+	bool comile_time = false;
 
 
 };

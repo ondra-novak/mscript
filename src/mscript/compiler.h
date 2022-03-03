@@ -33,15 +33,16 @@ Block compile(const std::vector<Element> &code, Value globalScope, const CodeLoc
 class Compiler {
 public:
 
-	Compiler(const std::vector<Element> &code, Value globalScope, BlockBld &bld, const CodeLocation &loc)
-			:code(code), globalScope(globalScope), bld(bld),loc(loc) {}
+	Compiler(const std::vector<Element> &code, Value globalScope, const CodeLocation &loc)
+			:code(code), globalScope(globalScope), loc(loc) {}
 
+	PNode compile();
 
 
 protected:
 	const std::vector<Element> &code;
 	Value globalScope;
-	BlockBld &bld;
+	//BlockBld &bld;
 	CodeLocation loc;
 	int curLine = 0;
 	int lastLine = 0;
@@ -76,6 +77,8 @@ protected:
 	PNode compileFor();
 	PNode compileWhile();
 	void eatSeparators();
+
+	PNode tryCompileAssgn();
 };
 
 

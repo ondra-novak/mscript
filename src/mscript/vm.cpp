@@ -112,7 +112,7 @@ void VirtualMachine::raise(std::exception_ptr e) {
 	while (p) {
 		--p;
 		if (taskStack[p]->exception(*this, e)) {
-			taskStack.resize(p+1);
+			if (taskStack.size() > p+1) taskStack.resize(p+1);
 			return;
 		}
 		auto loc = taskStack[p]->getCodeLocation();
@@ -161,16 +161,16 @@ Value VirtualMachine::pop_value() {
 void VirtualMachine::del_value() {
 	switch(paramPack) {
 		case 0: break;
-		case 1: if (!calcStack.empty()) calcStack.pop_back();
+		case 1: if (!calcStack.empty()) calcStack.pop_back(); break;
 		default: for (std::size_t i = 0; i < paramPack; i++) {
 			calcStack.pop_back();
 		}
 	}
-	define_param_pack(1);
+	paramPack = std::min<std::size_t>(1, calcStack.size());
 }
 
 void VirtualMachine::push_value(const Value &val) {
-	collapse_param_pack();
+	if (paramPack>1) collapse_param_pack();
 	calcStack.push_back(val);
 	paramPack = 1;
 }
@@ -182,7 +182,7 @@ Value VirtualMachine::get_this() {
 }
 
 bool VirtualMachine::restore_state(const VMState &st) {
-	if (st.scopes > scopeStack.size() || st.values > scopeStack.size()) {
+	if (st.scopes > scopeStack.size() || st.values > calcStack.size()) {
 		return false;
 	}
 	scopeStack.resize(st.scopes, Scope(Value()));
@@ -251,8 +251,10 @@ std::vector<CodeLocation> VirtualMachine::getExceptionCodeLocation() const {
 }
 
 void VirtualMachine::collapse_param_pack() {
-	if (paramPack != 1) {
-		push_value(pop_value());
+	switch(paramPack) {
+		case 0: push_value(json::array);paramPack = 1; break;
+		case 1: break;
+		default: push_value(pop_value()); break;
 	}
 }
 
@@ -270,6 +272,10 @@ bool VirtualMachine::call_function_raw(Value fnval, std::size_t argCnt) {
 			return false;
 		}
 	}
+}
+
+std::exception_ptr VirtualMachine::get_exception() const {
+	return exp;
 }
 
 }

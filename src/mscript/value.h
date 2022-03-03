@@ -18,13 +18,13 @@ using Value = json::Value;
 
 
 static inline bool isNativeType(const Value &val, const std::type_info &type) {
-	const json::_details::IWrap *wp = dynamic_cast<const json::_details::IWrap *>(static_cast<const json::IValue *>(val.getHandle()));
+	const json::_details::IWrap *wp = dynamic_cast<const json::_details::IWrap *>(static_cast<const json::IValue *>(val.stripKey().getHandle()));
 	if (wp == nullptr) return false;
 	return wp->cast(type) != nullptr;
 }
 
 static inline bool isNativeType(const Value &val) {
-	const json::_details::IWrap *wp = dynamic_cast<const json::_details::IWrap *>(static_cast<const json::IValue *>(val.getHandle()));
+	const json::_details::IWrap *wp = dynamic_cast<const json::_details::IWrap *>(static_cast<const json::IValue *>(val.stripKey().getHandle()));
 	return (wp != nullptr);
 }
 

@@ -19,6 +19,7 @@ json::NamedEnum<Symbol> strKeywords({
 	{Symbol::s_slash,"/"},  // /
 	{Symbol::s_percent,"%"}, // %
 	{Symbol::s_equal,"="},  // =
+	{Symbol::s_dequal,"=="},  // =
 	{Symbol::s_not_equal,"!="}, // !=, <>
 	{Symbol::s_not_equal,"<>"}, // !=, <>
 	{Symbol::s_less,"<"},   // <
@@ -41,7 +42,10 @@ json::NamedEnum<Symbol> strKeywords({
 	{Symbol::s_questionmark,"?"}, // ?
 	{Symbol::s_exclamation,"!"}, // !
 	{Symbol::s_power,"^"}, // ^
-	{Symbol::s_underscore,"_"}, // _
+	{Symbol::s_dollar,"$"}, // $
+	{Symbol::s_amp,"@"}, // @
+	{Symbol::s_dblq,"??"}, // ??
+	{Symbol::s_qequal,"?="}, // ?=
 	{Symbol::kw_exec,"exec"},		//exec {... block ...}
 	{Symbol::kw_with,"with"},        //with A {.... block ....}
 	{Symbol::kw_object,"object"},		//object {.... block ....}, object A {.... block ....}

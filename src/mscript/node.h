@@ -8,7 +8,8 @@
 #ifndef SRC_MSCRIPT_NODE_H_
 #define SRC_MSCRIPT_NODE_H_
 #include <mscript/block.h>
-#include <unordered_map>
+#include <mscript/function.h>
+#include <unordered_set>
 
 namespace mscript {
 
@@ -19,8 +20,11 @@ namespace mscript {
 		void pushCmd(Cmd cmd);
 		void setInt2(std::intptr_t val, std::size_t pos);
 		std::intptr_t pushConst(Value v);
+		std::size_t lastStorePos;
 	};
 
+
+	using VarSet = std::unordered_set<Value>;
 
 	class INode {
 	public:
@@ -30,24 +34,28 @@ namespace mscript {
 		/**
 		 * Only some nodes supports this function
 		 */
-		virtual void generateAssign(BlockBld &blk) const = 0;
+		//virtual void generateAssign(BlockBld &blk) const = 0;
 		///Generate code as expression
 		virtual void generateExpression(BlockBld &blk) const =0;
+		virtual void generateListVars(VarSet &vars) const = 0;
 	};
 
 	using PNode = std::unique_ptr<INode>;
 
 	class Expression: public INode {
 	public:
-		virtual void generateAssign(BlockBld &blk) const override {
-			throw std::runtime_error("Invalid assignment");
-		}
+	};
+
+	class ConstantLeaf: public Expression {
+	public:
+		virtual void generateListVars(VarSet &vars) const override;
 	};
 
 	class BinaryOperation: public Expression {
 	public:
 		BinaryOperation(PNode &&left, PNode &&right, Cmd instruction);
 		virtual void generateExpression(BlockBld &blk) const;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode left, right;
 		Cmd instruction;
@@ -57,6 +65,7 @@ namespace mscript {
 	public:
 		UnaryOperation(PNode &&item, Cmd instruction);
 		virtual void generateExpression(BlockBld &blk) const;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode item;
 		Cmd instruction;
@@ -66,6 +75,7 @@ namespace mscript {
 	public:
 		Assignment(PNode &&assignment, PNode &&expression);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode assignment, expression;
 	};
@@ -73,14 +83,14 @@ namespace mscript {
 	class Identifier: public INode {
 	public:
 		Identifier(Value name);
-		virtual void generateAssign(BlockBld &blk) const override;
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 		Value getName() const;
 	protected:
 		Value name;
 	};
 
-	class NumberNode: public Expression {
+	class NumberNode: public ConstantLeaf {
 	public:
 		NumberNode(Value n);
 		virtual void generateExpression(BlockBld &blk) const override;
@@ -88,7 +98,7 @@ namespace mscript {
 		Value n;
 	};
 
-	class ValueNode: public Expression {
+	class ValueNode: public ConstantLeaf {
 	public:
 		ValueNode(Value n);
 		virtual void generateExpression(BlockBld &blk) const override;
@@ -96,21 +106,23 @@ namespace mscript {
 		Value n;
 	};
 
-	class Underscore: public INode {
+	class BlockValueNode: public ValueNode {
 	public:
-		virtual void generateAssign(BlockBld &blk) const override;
-		virtual void generateExpression(BlockBld &blk) const override;
+		BlockValueNode(Value n, PNode &&blockTree);
+		const PNode &getBlockTree() const;
+	protected:
+		PNode blockTree;
 	};
 
-	class AbstractParamPackNode: public INode {
+	class AbstractParamPackNode: public Expression {
 	public:
 		virtual void moveTo(std::vector<PNode> &nodes) = 0;
-		static void makeAssign(BlockBld &blk, const PNode &n, bool arr);
 		virtual std::size_t count() const = 0;
 		virtual void generateUnclosedExpression(BlockBld &blk) const = 0;
 		virtual void generateExpression(BlockBld &blk) const override;
 		void setInfinite(bool inf) {infinite = inf;}
 		bool isInfinte() const {return infinite;}
+
 	protected:
 		bool infinite = false;
 	};
@@ -120,8 +132,8 @@ namespace mscript {
 	class ParamPackNode: public AbstractParamPackNode {
 	public:
 		ParamPackNode(PNode &&current, PNode &&nw);
-		virtual void generateAssign(BlockBld &blk) const override;
 		virtual void generateUnclosedExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 		virtual void moveTo(std::vector<PNode> &nodes) override;;
 		virtual std::size_t count() const override;
 	protected:
@@ -131,8 +143,8 @@ namespace mscript {
 	class SingleParamPackNode: public AbstractParamPackNode {
 	public:
 		SingleParamPackNode(PNode &&n);
-		virtual void generateAssign(BlockBld &blk) const override;
 		virtual void generateUnclosedExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 		virtual void moveTo(std::vector<PNode> &nodes) override;;
 		virtual std::size_t count() const override;
 	protected:
@@ -141,24 +153,23 @@ namespace mscript {
 
 	class EmptyParamPackNode: public AbstractParamPackNode {
 	public:
-		virtual void generateAssign(BlockBld &blk) const override;
 		virtual void generateUnclosedExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 		virtual void moveTo(std::vector<PNode> &nodes) override;;
 		virtual std::size_t count() const override;
-	protected:
-		PNode n;
 	};
 
 	class FunctionCall: public Expression {
 	public:
 		FunctionCall(PNode &&fn, PParamPackNode &&paramPack);
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		virtual void generateExpression(BlockBld &blk) const override;
 		PNode fn;
 		PParamPackNode paramPack;
 	};
 
-	class DirectCmdNode: public Expression {
+	class DirectCmdNode: public ConstantLeaf {
 	public:
 		DirectCmdNode(Cmd cmd);
 	protected:
@@ -183,22 +194,35 @@ namespace mscript {
 		UndefinedNode(): DirectCmdNode(Cmd::push_undefined) {}
 	};
 
-	class KwExecNode: public Expression {
+	class ExecNode: public Expression {
 	public:
-		KwExecNode(PNode &&nd_block);
+		ExecNode(PNode &&nd_block);
+		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
+
+	protected:
+		PNode nd_block;
+	};
+
+
+	class KwExecNode: public ExecNode {
+	public:
+		using ExecNode::ExecNode;
 		virtual void generateExpression(BlockBld &blk) const override;
 	protected:
 		PNode nd_block;
 	};
 
-	class KwWithNode: public Expression {
+	class KwWithNode: public ExecNode {
 	public:
 		KwWithNode(PNode &&nd_object, PNode &&nd_block);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode nd_object;
 		PNode nd_block;
 	};
+
 
 	class KwExecObjectNode: public KwWithNode {
 	public:
@@ -216,19 +240,21 @@ namespace mscript {
 	public:
 		IfElseNode(PNode &&cond, PNode &&nd_then, PNode &&nd_else);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
-		PNode &&cond;
-		PNode &&nd_then;
-		PNode &&nd_else;
+		PNode cond;
+		PNode nd_then;
+		PNode nd_else;
 	};
 
 	class IfOnlyNode: public Expression {
 	public:
 		IfOnlyNode(PNode &&cond, PNode &&nd_then);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
-		PNode &&cond;
-		PNode &&nd_then;
+		PNode cond;
+		PNode nd_then;
 	};
 
 	class DerefernceNode: public BinaryOperation {
@@ -240,6 +266,7 @@ namespace mscript {
 	public:
 		DerefernceDotNode(PNode &&left, Value identifier);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode left;
 		Value identifier;
@@ -249,10 +276,11 @@ namespace mscript {
 	public:
 		MethodCallNode(PNode &&left, Value identifier, PParamPackNode &&pp);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
-		PNode &&left;
+		PNode left;
 		Value identifier;
-		PParamPackNode &&pp;
+		PParamPackNode pp;
 	};
 
 
@@ -264,6 +292,7 @@ namespace mscript {
 	public:
 		BlockNode(std::vector<PNode> &&code);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		std::vector<PNode> code;
 	};
@@ -272,6 +301,7 @@ namespace mscript {
 	public:
 		PushArrayNode(std::vector<PNode> &&code);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		std::vector<PNode> code;
 	};
@@ -280,16 +310,19 @@ namespace mscript {
 	public:
 		BooleanAndOrNode(PNode &&left,PNode &&right, bool and_node);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode left;
 		PNode right;
 		bool and_node;
 	};
 
+
 	class ForLoopNode: public Expression {
 	public:
 		ForLoopNode(Value iterator, PNode &&container, std::vector<std::pair<Value,PNode> > &&init, PNode &&block);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		Value iterator;
 		PNode container;
@@ -301,17 +334,51 @@ namespace mscript {
 	public:
 		WhileLoopNode(PNode &&condition, PNode &&block);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode condition;
 		PNode block;
 	};
 
-	class UpdateLineNode: public Expression {
+
+
+	class UserFn: public AbstractFunction {
 	public:
-		UpdateLineNode(int amount);
+		UserFn(Value &&code, std::vector<std::string> &&identifiers)
+			:code(std::move(code)), identifiers(identifiers) {}
+		virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value closure) const override;
+		const Value& getCode() const {return code;}
+		const std::vector<std::string>& getIdentifiers() const {return identifiers;}
+
+	protected:
+		Value code;
+		std::vector<std::string> identifiers;
+	};
+
+	class SimpleAssignNode: public ConstantLeaf {
+	public:
+		SimpleAssignNode(Value ident);
+		virtual void generateExpression(BlockBld &blk) const override;
+		Value getIdent() const {return ident;}
+	protected:
+		Value ident;
+	};
+
+	class IsDefinedNode: public ConstantLeaf {
+	public:
+		IsDefinedNode(Value ident);
 		virtual void generateExpression(BlockBld &blk) const override;
 	protected:
-		int amount;
+		Value ident;
+	};
+
+
+	class PackAssignNode: public ConstantLeaf {
+	public:
+		PackAssignNode(std::vector<Value> &&idents);
+		virtual void generateExpression(BlockBld &blk) const override;
+	protected:
+		std::vector<Value> idents;
 	};
 
 }

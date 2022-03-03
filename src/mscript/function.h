@@ -65,7 +65,7 @@ static inline Value defineFunction(Fn &&fn) {
 	auto ptr = std::make_unique<FnClass>(std::forward<Fn>(fn));
 	auto rawptr = ptr.get();
 	std::string name = "Native fn "+std::to_string(*reinterpret_cast<const std::uintptr_t *>(&rawptr));
-	return packToValue(std::move(ptr), name);
+	return packToValue(std::unique_ptr<AbstractFunction>(std::move(ptr)), name);
 }
 
 template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<ParamPack>()))>

@@ -1,0 +1,10 @@
+BLOCK={
+	A?=10	
+	C=A+B
+	(A,B,C)
+}
+B=20
+(X,-,Z)=exec BLOCK
+X+Z
+
+	

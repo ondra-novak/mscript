@@ -1,0 +1,5 @@
+# A?= causes disable optimalization
+
+A?=10
+B=20
+C=A+B

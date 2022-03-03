@@ -14,16 +14,24 @@ namespace mscript {
 
 Block compile(const std::vector<Element> &code, Value globalScope, const CodeLocation &loc) {
 
-	PNode tree;
+	Compiler cmp(code, globalScope, loc);
+
+	PNode tree = cmp.compile();
 
 	return buildCode(tree, loc);
 
 }
 
 
+PNode Compiler::compile() {
+	curLine = 0;
+	lastLine = 0;
+	curSymbol = 0;
+	return compileBlockContent();
+}
 
 const Element& Compiler::next() {
-	if (curSymbol > code.size()) return eof;
+	if (curSymbol >= code.size()) return eof;
 	else return code[curSymbol];
 }
 
@@ -129,7 +137,7 @@ PNode Compiler::parseValue() {
 	case Symbol::kw_exec:
 		commit();
 		checkBeginBlock();
-		out = handleValueSuffixes(std::make_unique<UnaryOperation>(parseValue(), Cmd::exec_block));
+		out = handleValueSuffixes(std::make_unique<KwExecNode>(parseValue()));
 		break;
 	case Symbol::kw_with: {
 			commit();
@@ -166,6 +174,7 @@ PNode Compiler::parseValue() {
 	case Symbol::s_left_brace:
 		commit();
 		out = compileBlock();
+		out = std::make_unique<BlockValueNode>(packToValue(buildCode(out, {loc.file, loc.line+curLine})), std::move(out));
 		break;
 	case Symbol::s_exclamation:
 		commit();
@@ -215,7 +224,7 @@ PNode Compiler::parseValue() {
 PNode Compiler::parseIfElse() {
 	PNode cond = parseValue();
 	checkBeginBlock();
-	PNode blk1 = parseValue();
+	PNode blk1 = parseValue(); //TODO execute block
 	if (next().symbol == Symbol::kw_else) {
 		commit();
 		PNode blk2;
@@ -235,6 +244,7 @@ PNode Compiler::parseIfElse() {
 
 PParamPackNode Compiler::parseParamPack() {
 	if (next().symbol == Symbol::s_right_bracket) {
+		commit();
 		return std::make_unique<EmptyParamPackNode>();
 	}
 	eatSeparators();
@@ -243,7 +253,7 @@ PParamPackNode Compiler::parseParamPack() {
 	while (next().symbol == Symbol::s_comma) {
 		commit();
 		eatSeparators();
-		PParamPackNode s =std::make_unique<ParamPackNode>(std::move(s),compileExpression());
+		s =std::make_unique<ParamPackNode>(std::move(s),compileExpression());
 		eatSeparators();
 	}
 	if (next().symbol == Symbol::s_threedots) {
@@ -285,12 +295,41 @@ PNode Compiler::compileDefineFunction(PNode expr) {
 
 }
 
+class CompileTimeContent: public AbstractTask {
+public:
+
+	CompileTimeContent(bool &exception):exp(exception) {}
+	virtual bool init(VirtualMachine &vm)override  {
+		st = vm.save_state();
+		return true;
+	}
+	virtual bool run(VirtualMachine &vm) override {
+		return false;
+	}
+	virtual bool exception(VirtualMachine &vm, std::exception_ptr e) {
+		exp= true;
+		vm.restore_state(st);
+		return true;
+	}
+
+
+protected:
+	VirtualMachine::VMState st;
+	bool &exp;
+
+
+};
+
 PNode Compiler::compileBlockContent() {
 	VirtualMachine vm;
 	vm.setGlobalScope(globalScope);
+	vm.setComileTime(true);
+	vm.push_scope(Value());
 	vm.push_scope(Value());
 
 	std::vector<PNode> nodes, code;
+	VarSet vs;
+	bool clear = true;
 
 
 	auto s = next();
@@ -298,33 +337,43 @@ PNode Compiler::compileBlockContent() {
 		if (s.symbol != Symbol::separator) {
 			PNode cmd = compileCommand();
 			Value bk = packToValue(buildCode(cmd, loc));
-			vm.del_value();
+			bool err = false;
+			if (!clear) vm.pop_value();
+			clear = true;
+			vm.push_task(std::make_unique<CompileTimeContent>(err));
 			vm.push_task(std::make_unique<BlockExecution>(bk));
 			while (vm.run());
-			if (vm.get_exception()) {
-				if (!nodes.empty()) { //this removes result of previous expression
-					nodes.push_back(std::make_unique<DirectCmdNode>(Cmd::del));
-				}
+			if (err) {
+				cmd->generateListVars(vs);
 				nodes.push_back(std::move(cmd));
-				if (curLine != lastLine) {
+				/*if (curLine != lastLine) {
 					nodes.push_back(std::make_unique<UpdateLineNode>(curLine - lastLine));
 					lastLine = curLine;
-				}
+					//TODO map of lines
+				}*/
 			}
 		} else {
+			clear = false;
 			commit();
 		}
+		s = next();
 	}
 	Value variables = vm.scope_to_object();
+	bool allNeed = vs.find(nullptr) != vs.end();
 	for (Value x: variables) {
-		code.push_back(
-			std::make_unique<Assignment>(
-					std::make_unique<Identifier>(x.getKey()),
-					std::make_unique<ValueNode>(x)));
+		if (allNeed || vs.find(Value(x.getKey())) != vs.end()) {
+			code.push_back(
+				std::make_unique<Assignment>(
+						std::make_unique<SimpleAssignNode>(x.getKey()),
+						std::make_unique<ValueNode>(x)));
+		}
 
 	}
 	for (PNode &nd: nodes) {
 		code.push_back(std::move(nd));
+	}
+	if (!clear) {
+		code.push_back(std::make_unique<ValueNode>(vm.pop_value()));
 	}
 
 	return std::make_unique<BlockNode>(std::move(code));
@@ -340,13 +389,74 @@ PNode Compiler::compileBlock() {
 PNode Compiler::compileCommand() {
 	auto s = next();
 	if (s.symbol == Symbol::separator) return nullptr;
-	PNode cmd = compileExpression();
-	if (s.symbol == Symbol::s_equal) {
-		commit();
-		s = next();
-		cmd = std::make_unique<Assignment>(std::move(cmd), compileExpression());
+	auto sv=curSymbol;
+	PNode assg = tryCompileAssgn();
+	if (assg == nullptr) {
+		curSymbol = sv;
+		PNode cmd = compileExpression();
+		return cmd;
+	} else {
+		PNode cmd;
+		if (next().symbol == Symbol::s_qequal) {
+			commit();
+			const SimpleAssignNode &nd = dynamic_cast<const SimpleAssignNode &>(*assg);
+			Value ident = nd.getIdent();
+			cmd = compileExpression();
+			cmd = std::make_unique<IfElseNode>(
+					std::make_unique<IsDefinedNode>(ident),
+					std::make_unique<Identifier>(ident),
+					std::move(cmd)
+			);
+		} else {
+			commit();
+			cmd = compileExpression();
+		}
+		return std::make_unique<Assignment>(std::move(assg),std::move(cmd));
+
 	}
-	return cmd;
+
+}
+
+PNode Compiler::tryCompileAssgn() {
+	auto s = next();
+	if (s.symbol==Symbol::identifier) {
+		commit();
+		if (next().symbol==Symbol::s_equal || next().symbol==Symbol::s_qequal) {
+			return std::make_unique<SimpleAssignNode>(s.data);
+		}else{
+			return nullptr;
+		}
+	} else if (s.symbol ==Symbol::s_left_bracket){
+        std::vector<Value> idents;
+        do {
+        	commit();
+        	s = next();
+        	if (s.symbol==Symbol::identifier) {
+        		idents.push_back(s.data);
+        		commit();
+        	} else if (s.symbol == Symbol::s_minus) {
+        		commit();
+        		idents.push_back(nullptr);
+        	} else {
+        		return nullptr;
+        	}
+        	s = next();
+        } while (s.symbol==Symbol::s_comma);
+        if (s.symbol ==Symbol::s_right_bracket){
+        	commit();
+    		if (next().symbol==Symbol::s_equal) {
+    			return std::make_unique<PackAssignNode>(std::move(idents));
+    		}else{
+    			return nullptr;
+    		}
+
+        } else {
+        	return nullptr;
+        }
+	} else  {
+    	return nullptr;
+    }
+
 }
 
 PNode Compiler::compileExpression() {
@@ -396,6 +506,7 @@ PNode Compiler::compileCompare() {
 	PNode nd = compileAddSub();
 	Cmd cmd;
 	switch(next().symbol) {
+	case Symbol::s_dequal:
 	case Symbol::s_equal: cmd = Cmd::op_cmp_eq; break;
 	case Symbol::s_not_equal: cmd = Cmd::op_cmp_not_eq; break;
 	case Symbol::s_less: cmd = Cmd::op_cmp_less; break;

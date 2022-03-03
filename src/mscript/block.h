@@ -12,6 +12,7 @@
 #define SRC_MSCRIPT_BLOCK_H_
 
 
+#include <string>
 #include "vm.h"
 #include "exceptions.h"
 
@@ -60,15 +61,13 @@ enum class Cmd:std::uint8_t{
 	push_array_4,		///<push array (argument count items)
 
 	/// set variables from param pack
-	reset_ir,			///<reset index register
-	inc_ir,				///<increase ir, skip argument
-	set_var_ir_1,		///<pick name of variable from consts (1 byte), set variable from param_pack by register ir, increase ir by 1
-	set_var_ir_2,		///<pick name of variable from consts (2 byte), set variable from param_pack by register ir, increase ir by 1
-	set_var_arr_ir_1,	///<stores rest of param pack to variable - from ir to end
-	set_var_arr_ir_2,	///<stores rest of param pack to variable - from ir to end
 	set_var_1,		    ///<pick name of variable from consts (1 byte), set variable
 	set_var_2,		    ///<pick name of variable from consts (2 byte), set variable
+	pop_var_1,		    ///<pick name of variable from consts (1 byte), set variable
+	pop_var_2,		    ///<pick name of variable from consts (2 byte), set variable
 
+	is_def_1,			///<pick name of varuable, put on stack result (true if defined)
+	is_def_2,			///<pick name of varuable, put on stack result (true if defined)
 
 	/// operations
 
@@ -99,12 +98,10 @@ enum class Cmd:std::uint8_t{
 	jump_false_2,	///consumes bool and jumps if false
 	exit_block,		///exit current block
 
-	///debugging
-
-	dbg_inc_line_1,		///<increase line counter and report line 1 byte
-	dbg_inc_line_2,		///<increase line counter and report line 2 bytes
 };
 
+
+extern json::NamedEnum<Cmd> strCmd;
 
 
 struct Block {
@@ -116,10 +113,20 @@ public:
 
 	CodeLocation location;
 
+	enum class DisEvent {
+		code,
+		begin_fn,
+		end_fn,
+		begin_block,
+		end_block,
+		location,
+	};
+
+	template<typename Fn> void disassemble(Fn &&fn) const;
 };
 
 static inline Value packToValue(Block &&block) {
-	return json::makeValue(std::move(block), {block.location.file, block.location.line});
+	return json::makeValue(std::move(block), json::Object{{"@BLOCK",{block.location.file, block.location.line}}});
 }
 
 static inline bool isBlock(const Value &v) {
@@ -134,6 +141,7 @@ static inline const Block &getBlockFromValue(const Value &v) {
 class BlockExecution: public AbstractTask {
 public:
 	BlockExecution(Value block);
+	BlockExecution(const BlockExecution &other);
 
 	virtual bool init(VirtualMachine &vm);
 	virtual bool run(VirtualMachine &vm);
@@ -143,7 +151,6 @@ public:
 protected:
 	Value block_value;
 	const Block &block;
-	std::size_t line = 0;
 	std::size_t ir = 0;
 	std::size_t ip = 0;
 
@@ -179,6 +186,8 @@ protected:
 	void argument_is_not_block(VirtualMachine &vm, Value v);
 	void do_push_array(VirtualMachine &vm, std::intptr_t count);
 
+	void do_isdef(VirtualMachine &vm, std::intptr_t idx);
+
 	static Value op_add(const Value &a, const Value &b);
 	static Value op_sub(const Value &a, const Value &b);
 	static Value op_mult(const Value &a, const Value &b);
@@ -191,6 +200,8 @@ protected:
 
 
 	static Value do_deref(const Value where, const Value &what);
+
+
 };
 
 class InvalidInstruction: public VMException {

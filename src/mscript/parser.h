@@ -24,6 +24,7 @@ enum class Symbol {
 	s_slash,  // /
 	s_percent, // %
 	s_equal,  // =
+	s_dequal,  // ==
 	s_not_equal, // !=, <>
 	s_less,   // <
 	s_greater,  // >
@@ -45,7 +46,10 @@ enum class Symbol {
 	s_questionmark, // ?
 	s_exclamation, // !
 	s_power, // ^
-	s_underscore, // _
+	s_dollar, // $
+	s_amp, //@
+	s_qequal, // ?=
+	s_dblq, // ??
 	kw_exec,		//exec {... block ...}
 	kw_with,        //with A {.... block ....}
 	kw_object,		//object {.... block ....}, object A {.... block ....}
@@ -92,7 +96,7 @@ public:
 
 		while (true) {
 			int c = this->rd.nextCommit();
-			while (c == '\t' || c == ' ' ) c = this->rd();
+			while (c == '\t' || c == ' ' ) c = this->rd.nextCommit();
 			switch (c) {
 				case -1: return {Symbol::eof};
 				case '\n': return {Symbol::separator};
@@ -101,8 +105,13 @@ public:
 				case '!':switch (this->rd.next()) {
 					case '=': this->rd.commit(); return {Symbol::s_not_equal};;
 					default: return {Symbol::s_exclamation};;
-					};
-				case '?': return {Symbol::s_questionmark};
+					};break;
+				case '?': switch (this->rd.next()) {
+					default: return {Symbol::s_questionmark};
+					case '=': this->rd.commit(); return {Symbol::s_qequal};
+					case '?': this->rd.commit(); return {Symbol::s_dblq};
+					}; break;
+
 				case '%': return {Symbol::s_percent};
 				case '^': return {Symbol::s_power};
 				case '(': return {Symbol::s_left_bracket};
@@ -111,6 +120,8 @@ public:
 				case '/': return {Symbol::s_slash};
 				case '+': return {Symbol::s_plus};
 				case '-': return {Symbol::s_minus};
+				case '@': return {Symbol::s_amp};
+				case '$': return {Symbol::s_dollar};
 				case '>': switch (this->rd.next()) {
 					case '=': this->rd.commit(); return {Symbol::s_greater_equal};
 					default: return {Symbol::s_greater};
@@ -121,19 +132,18 @@ public:
 					default: return {Symbol::s_less};
 				};
 				case '=': switch (this->rd.next()) {
-					case '=': this->rd.commit(); return {Symbol::s_equal};
+					case '=': this->rd.commit(); return {Symbol::s_dequal};
 					case '>': this->rd.commit(); return {Symbol::s_arrow};
 					default: return {Symbol::s_equal};
 				};
 				case '.': switch (this->rd.next()) {
-					default: return {Symbol::s_equal};
 					case '.': this->rd.commit();
 							switch (this->rd.next()) {
 								case '.': this->rd.commit(); return {Symbol::s_threedots};
 								default: return {Symbol::s_twodots};
 							}
 					default: return {Symbol::s_dot};
-				};
+				};break;
 				case ';': return {Symbol::s_semicolon};
 				case ',': return {Symbol::s_comma};
 				case '[': return {Symbol::s_left_square_bracket};
