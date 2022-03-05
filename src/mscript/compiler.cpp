@@ -45,7 +45,7 @@ void Compiler::sync(const Element &elem) {
 	if (exp == elem) {
 		commit();
 	} else {
-		throw std::runtime_error(std::string("Expected element: ").append(strKeywords[exp.symbol]));
+		throw compileError(std::string("Expected element: ").append(strKeywords[exp.symbol]));
 	}
 }
 
@@ -54,7 +54,7 @@ void Compiler::sync(const Symbol &symbol) {
 	if (exp.symbol == symbol) {
 		commit();
 	} else {
-		throw std::runtime_error(std::string("Expected symbol: `").append(strKeywords[symbol]).append("`, found:`").append(strKeywords[exp.symbol]).append("`"));
+		throw compileError(std::string("Expected symbol: `").append(strKeywords[symbol]).append("`, found:`").append(strKeywords[exp.symbol]).append("`"));
 	}
 
 }
@@ -62,7 +62,7 @@ void Compiler::sync(const Symbol &symbol) {
 void Compiler::checkBeginBlock() {
 	auto n = next();
 	if (n.symbol != Symbol::identifier && n.symbol != Symbol::s_left_brace) {
-		throw std::runtime_error(std::string("Expected begin of block, found: ").append(strKeywords[n.symbol]));
+		throw compileError(std::string("Expected begin of block, found: ").append(strKeywords[n.symbol]));
 	}
 }
 
@@ -93,7 +93,7 @@ PNode Compiler::handleValueSuffixes(PNode expr) {
 				return handleValueSuffixes(std::make_unique<DerefernceDotNode>(std::move(expr), s.data));
 			}
 		}
-		throw std::runtime_error("Expected identifier after '.' ");
+		throw compileError("Expected identifier after '.' ");
 		break;
 	default:
 		return expr;
@@ -216,6 +216,7 @@ PNode Compiler::parseValue() {
 		out = std::make_unique<ThisNode>();
 		break;
 	default:
+		throw compileError(std::string("Unexpected symbol: ").append(strKeywords[s.symbol]));
 		break;
 	}
 	return handleValueSuffixes(std::move(out));
@@ -224,7 +225,8 @@ PNode Compiler::parseValue() {
 PNode Compiler::parseIfElse() {
 	PNode cond = parseValue();
 	checkBeginBlock();
-	PNode blk1 = std::make_unique<ExecNode>(parseValue()); //TODO execute block
+	PNode blk1 = compileBlockOrExpression();
+	bool eat = eatSeparators();
 	if (next().symbol == Symbol::kw_else) {
 		commit();
 		PNode blk2;
@@ -232,11 +234,11 @@ PNode Compiler::parseIfElse() {
 			commit();
 			blk2 = parseIfElse();
 		} else {
-			checkBeginBlock();
-			blk2 = std::make_unique<ExecNode>(parseValue());
+			blk2 = compileBlockOrExpression();
 		}
 		return std::make_unique<IfElseNode>(std::move(cond), std::move(blk1), std::move(blk2));
 	} else {
+		if (eat) {curSymbol--;curLine--;} //only else is allowed on next line, otherwise go one symbol back
 		return std::make_unique<IfElseNode>(std::move(cond), std::move(blk1), std::move(std::make_unique<DirectCmdNode>(Cmd::push_null)));
 	}
 
@@ -279,7 +281,7 @@ PNode Compiler::compileDefineFunction(PNode expr) {
 				identifiers.push_back(x.getName().getString());
 			}
 		} catch (const std::bad_cast &) {
-			throw std::runtime_error("Invalid function parameter definition");
+			throw compileError("Invalid function parameter definition");
 		}
 	}
 	commit();
@@ -385,6 +387,7 @@ PNode Compiler::compileCommand() {
 	if (assg == nullptr) {
 		curSymbol = sv;
 		PNode cmd = compileExpression();
+		syncSeparator();
 		return cmd;
 	} else {
 		PNode cmd;
@@ -402,6 +405,7 @@ PNode Compiler::compileCommand() {
 			commit();
 			cmd = compileExpression();
 		}
+		syncSeparator();
 		return std::make_unique<Assignment>(std::move(assg),std::move(cmd));
 
 	}
@@ -450,6 +454,8 @@ PNode Compiler::tryCompileAssgn() {
 
 }
 
+
+
 PNode Compiler::compileExpression() {
 	PNode nd1 = compileOr();
 	auto s = next();
@@ -466,7 +472,7 @@ PNode Compiler::compileExpression() {
 			eatSeparators();
 			return std::make_unique<IfElseNode>(std::move(nd1),std::move(nd2),std::move(nd3));
 		} else{
-			throw std::runtime_error("Expected ':' ");
+			throw compileError("Expected ':' ");
 		}
 	} else {
 		return nd1;
@@ -571,9 +577,13 @@ PNode Compiler::compileArray() {
 }
 
 
-void Compiler::eatSeparators() {
-	while (next().symbol == Symbol::separator)
+bool Compiler::eatSeparators() {
+	bool k = false;
+	while (next().symbol == Symbol::separator) {
 		commit();
+		k = true;
+	}
+	return k;
 }
 
 PNode Compiler::compileFor() {
@@ -585,7 +595,7 @@ PNode Compiler::compileFor() {
 		while (true) {
 			eatSeparators();
 			if (next().symbol != Symbol::identifier) {
-				throw std::runtime_error("Expected identifier");
+				throw compileError("Expected identifier");
 			}
 			Value ident = next().data;
 			commit();
@@ -600,7 +610,7 @@ PNode Compiler::compileFor() {
 				init.push_back({ident, compileExpression()});
 				break;
 			default:
-				throw std::runtime_error(std::string("Unexpected symbol. Expected ':' or '=' :").append(strKeywords[next().symbol]));
+				throw compileError(std::string("Unexpected symbol. Expected ':' or '=' :").append(strKeywords[next().symbol]));
 			}
 			eatSeparators();
 			if (next().symbol == Symbol::s_comma) {
@@ -614,7 +624,7 @@ PNode Compiler::compileFor() {
 		commit();
 	}
 	if (iter_value == nullptr) {
-		throw std::runtime_error("Operator `for` must have an iterator 'for (iterator: container)' ");
+		throw compileError("Operator `for` must have an iterator 'for (iterator: container)' ");
 	}
 	checkBeginBlock(); //block follows
 	return std::make_unique<ForLoopNode>(iterator, std::move(iter_value), std::move(init), parseValue());
@@ -627,5 +637,30 @@ PNode Compiler::compileWhile() {
 	return std::make_unique<WhileLoopNode>(std::move(cond), parseValue());
 }
 
+PNode Compiler::compileBlockOrExpression() {
+	auto s = next();
+	PNode out;
+	if (s.symbol == Symbol::s_left_brace) {
+		commit();
+		out = compileBlock();
+	} else {
+		out = compileExpression();
+	}
+	return out;
+}
+
+CompileError Compiler::compileError(const std::string &text) {
+	return CompileError(text, {loc.file, loc.line+curLine+1});
+}
+
+void Compiler::syncSeparator() {
+	auto s= next();
+	if (s.symbol == Symbol::separator) {
+		commit();
+	} else if (s.symbol != Symbol::eof) {
+		throw compileError("Expected end of line or end of file");
+	}
+}
 
 }
+

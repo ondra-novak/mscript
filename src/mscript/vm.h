@@ -15,6 +15,7 @@
 
 #include "param_pack.h"
 #include "value.h"
+#include "codelocation.h"
 
 namespace mscript {
 
@@ -24,10 +25,6 @@ class VirtualMachine;
 class VMException;
 
 
-struct CodeLocation {
-	std::string file;
-	std::size_t line;
-};
 
 
 class AbstractTask {

@@ -76,9 +76,12 @@ protected:
 	PNode compileArray();
 	PNode compileFor();
 	PNode compileWhile();
-	void eatSeparators();
+	bool eatSeparators();
 
 	PNode tryCompileAssgn();
+	PNode compileBlockOrExpression();
+	CompileError compileError(const std::string &text);
+	void syncSeparator();
 };
 
 

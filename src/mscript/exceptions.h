@@ -10,6 +10,7 @@
 
 #include <stdexcept>
 #include "value.h"
+#include "codelocation.h"
 
 namespace mscript {
 
@@ -75,6 +76,16 @@ public:
 protected:
 	LimitType t;
 
+};
+
+
+class CompileError: public VMException {
+public:
+	CompileError(const std::string &text, const CodeLocation &loc);
+protected:
+	virtual void what(std::string &out) const override;
+	std::string text;
+	CodeLocation loc;
 };
 
 }

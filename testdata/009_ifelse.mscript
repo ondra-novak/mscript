@@ -1,23 +1,22 @@
-A?=1
+
+A=1
 if (A=1) {
 	printnl ("A=1")
 } else {
 	printnl ("A!=1")
 }
 
-B?=2
-if (B=1) {
-	printnl ("B=1")
-} else {
-	printnl ("B!=1")
-}
+B=2
+if (B=1) printnl ("B=1")
+else printnl ("B!=1")
 
-C?=3
+
+C=3
 if (C=3) {
 	printnl ("C=3")
 }
 
-D?=4
+D=4
 if (D=1) {
 	printnl ("D=1")
 } else if (D=2) {
@@ -25,6 +24,10 @@ if (D=1) {
 } else {
 	printnl ("D unknown")
 }
+
+if (D=1) printnl ("D=1") 
+else if (D=2) printnl ("D=2") 
+else printnl("D unknown")
 
 
 

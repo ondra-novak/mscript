@@ -73,4 +73,15 @@ void ExecutionLimitReached::what(std::string &out) const {
 	out.append(strLimitType[t]);
 }
 
+CompileError::CompileError(const std::string &text, const CodeLocation &loc):text(text),loc(loc) {
+}
+
+void CompileError::what(std::string &out) const {
+	out.append(loc.file);
+	out.push_back(':');
+	out.append(std::to_string(loc.line));
+	out.append(": error: ");
+	out.append(text);
+}
+
 }
