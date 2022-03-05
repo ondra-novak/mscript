@@ -19,11 +19,13 @@
 enum class Action {
 	parse,
 	showcode,
+	run
 };
 
 json::NamedEnum<Action> strAction({
 	{Action::parse,"parse"},
-	{Action::showcode,"showcode"}
+	{Action::showcode,"showcode"},
+	{Action::run,"run"}
 });
 
 using mscript::getVirtualMachineRuntime;
@@ -97,6 +99,51 @@ static int showcode(CmdArgIter &iter) {
 
 }
 
+static int run(CmdArgIter &iter) {
+
+	using namespace mscript;
+
+	std::ifstream fin;
+	int e = openFile(iter, fin);
+	if (e) return e;
+
+	std::vector<mscript::Element> elements;
+	parseScript([&](){
+		return fin.get();
+	}, elements);
+
+
+	Value global = getVirtualMachineRuntime();
+
+	auto block = packToValue(mscript::compile(elements, global, {"input",0}));
+
+	global.setItems({
+		{"print",defineSimpleFn([](const ParamPack &ppack)->Value{
+			for (Value v:ppack) {
+				std::cout << v.toString();
+			}
+			return nullptr;
+		})},
+		{"printnl",defineSimpleFn([](const ParamPack &ppack)->Value{
+			for (Value v:ppack) {
+				std::cout << v.toString();
+			}
+			std::cout << std::endl;
+			return nullptr;
+		})}
+	});
+
+	VirtualMachine vm;
+	vm.setGlobalScope(global);
+	vm.setMaxExecutionTime(std::chrono::seconds(30));
+	Value v = vm.exec(std::make_unique<BlockExecution>(block));
+	std::cout << std::endl << std::endl << "Result: " << v.stringify() << std::endl;
+
+
+	return 0;
+
+}
+
 int main(int argc, char **argv) {
 
 
@@ -121,6 +168,7 @@ int main(int argc, char **argv) {
 		switch (*action) {
 			case Action::parse: return testParse(argiter);
 			case Action::showcode: return showcode(argiter);
+			case Action::run: return run(argiter);
 		}
 
 	} catch(const std::exception &e) {

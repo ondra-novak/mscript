@@ -45,6 +45,12 @@ bool VirtualMachine::run() {
 	std::size_t task_sz = taskStack.size();
 	if (!task_sz) return false;
 	const auto &task = taskStack.back();
+	if (timeStop.has_value()) {
+		auto now = std::chrono::system_clock::now();
+		if (now > *timeStop) {
+			throw MaxExecutionTimeReached();
+		}
+	}
 	if (!task->run(*this)) {
 		//so task returned false, but added task or more tasks - we need to delete it from middle
 		if (task_sz >= taskStack.size()) {
@@ -59,10 +65,13 @@ bool VirtualMachine::run() {
 }
 
 void VirtualMachine::push_scope(const Value base) {
-	if (scopeStack.empty()) {
+	auto sz = scopeStack.size();
+	if (!sz) {
 		//if base is not defined, we can bind globalScope to current scope without need to create link
 		if (!base.defined()) scopeStack.emplace_back(globalScope);
 		else scopeStack.emplace_back(base, Value({globalScope,nullptr}));
+	} else if (sz >= cfg.maxScopeStack) {
+		throw ExecutionLimitReached(LimitType::scopeStack);
 	} else {
 		Value parentLink = scopeStack.back().create_parent_link();
 		scopeStack.emplace_back(base,parentLink);
@@ -70,6 +79,10 @@ void VirtualMachine::push_scope(const Value base) {
 }
 
 void VirtualMachine::push_task(std::unique_ptr<AbstractTask>&&task) {
+	auto sz = taskStack.size();
+	if (sz >= cfg.maxTaskStack) {
+		throw ExecutionLimitReached(LimitType::taskStack);
+	}
 	if (task->init(*this)) {
 		taskStack.push_back(std::move(task));
 	}
@@ -170,6 +183,7 @@ void VirtualMachine::del_value() {
 }
 
 void VirtualMachine::push_value(const Value &val) {
+	if (calcStack.size()>=cfg.maxCalcStack) throw ExecutionLimitReached(LimitType::calcStack);
 	if (paramPack>1) collapse_param_pack();
 	calcStack.push_back(val);
 	paramPack = 1;
@@ -277,6 +291,36 @@ bool VirtualMachine::call_function_raw(Value fnval, std::size_t argCnt) {
 std::exception_ptr VirtualMachine::get_exception() const {
 	return exp;
 }
+
+void VirtualMachine::setTimeStop(std::chrono::system_clock::time_point timeStop) {
+	this->timeStop = timeStop;
+}
+
+void VirtualMachine::clearTimeStop() {
+	timeStop.reset();
+}
+
+Value VirtualMachine::exec() {
+	do {} while (run());
+	auto e = get_exception();
+	if (e != nullptr) std::rethrow_exception(e);
+	else return pop_value();
+}
+
+Value VirtualMachine::exec(std::unique_ptr<AbstractTask>&& t) {
+	push_scope(Value());
+	push_task(std::move(t));
+	Value v = exec();
+	pop_scope();
+	return v;
+}
+
+VirtualMachine::VirtualMachine(const Config &cfg):cfg(cfg) {
+}
+
+VirtualMachine::VirtualMachine() {
+}
+
 
 }
 

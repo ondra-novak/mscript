@@ -87,6 +87,8 @@ enum class Cmd:std::uint8_t{
 	op_power,
 	op_unary_minus,
 	op_mod,
+	op_cmp_eq_1,		//<compare with constant - replace value with true if equal, push false, if not
+	op_cmp_eq_2,		//<compare with constant - replace value with true if equal, push false, if not
 
 	op_add_const_1,
 	op_add_const_2,

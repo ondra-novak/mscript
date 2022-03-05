@@ -8,6 +8,7 @@
 #ifndef SRC_MSCRIPT_VM_H_
 #define SRC_MSCRIPT_VM_H_
 #include <memory>
+#include <chrono>
 #include <imtjson/object.h>
 #include <imtjson/value.h>
 #include <shared/refcnt.h>
@@ -102,6 +103,18 @@ protected:
 class VirtualMachine {
 public:
 
+	struct Config {
+		///max calc stack size
+		unsigned int maxCalcStack = 1000;
+		///max task size (max recursion)
+		unsigned int maxTaskStack = 1000;
+		///max scope stack (max scope recursion)
+		unsigned int maxScopeStack = 1000;
+	};
+
+	VirtualMachine(const Config &cfg);
+	VirtualMachine();
+
 	using TaskStack = std::vector<std::unique_ptr<AbstractTask> >;
 	using CalcStack = std::vector<Value>;
 	using ScopeStack = std::vector<Scope>;
@@ -133,6 +146,11 @@ public:
 	 */
 	void raise(std::exception_ptr e);
 
+	///Exec current code, return value. Execption is thrown
+	Value exec();
+
+	///Exec task, return value. Exception is thrown
+	Value exec(std::unique_ptr<AbstractTask> &&);
 
 
 	///Retrieves exception if code stopped because exception
@@ -244,8 +262,24 @@ public:
 		comile_time = comileTime;
 	}
 
+
+	///Specifies time point when execution stops
+	void setTimeStop(std::chrono::system_clock::time_point timeStop);
+	///Disables time stop
+	void clearTimeStop();
+
+	///Sets max execution time
+	/**
+	 * When execution time is reached, it must be reset otherwise no futher execution is possible.
+	 * @param dur duration
+	 */
+	template<typename T,typename U>
+	void setMaxExecutionTime(const std::chrono::duration<T,U> &dur) {
+		setTimeStop(std::chrono::system_clock::now()+dur);
+	}
 protected:
 
+	Config cfg;
 	TaskStack taskStack;
 	CalcStack calcStack;
 	ScopeStack scopeStack;
@@ -253,6 +287,7 @@ protected:
 	std::size_t paramPack = 0;
 	std::exception_ptr exp = nullptr;
 	std::vector<CodeLocation> exp_location;
+	std::optional<std::chrono::system_clock::time_point> timeStop;
 
 	template<typename ... Args>
 	void push_arguments(const Value &v, const Args & ... args) {

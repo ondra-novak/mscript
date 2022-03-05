@@ -108,7 +108,7 @@ PNode Compiler::parseValue() {
 		out = std::make_unique<Identifier>(s.data);
 		commit();
 		if (next().symbol == Symbol::s_arrow) out = compileDefineFunction(std::move(out));
-		else out = handleValueSuffixes(std::move(out));
+		else out = std::move(out);
 		break;
 	case Symbol::number:
 		commit();
@@ -137,7 +137,7 @@ PNode Compiler::parseValue() {
 	case Symbol::kw_exec:
 		commit();
 		checkBeginBlock();
-		out = handleValueSuffixes(std::make_unique<KwExecNode>(parseValue()));
+		out = std::make_unique<KwExecNode>(parseValue());
 		break;
 	case Symbol::kw_with: {
 			commit();
@@ -145,7 +145,7 @@ PNode Compiler::parseValue() {
 			checkBeginBlock();
 			PNode blk = parseValue();
 			out = std::make_unique<KwWithNode>(std::move(obj), std::move(blk));
-			out = handleValueSuffixes(std::move(out));
+			out = std::move(out);
 		}
 		break;
 	case Symbol::kw_object: {
@@ -158,12 +158,12 @@ PNode Compiler::parseValue() {
 			} else {
 				out = std::make_unique<KwExecNewObjectNode>(std::move(x));
 			}
-			out = handleValueSuffixes(std::move(out));
+			out = std::move(out);
 		}
 		break;
 	case Symbol::kw_if:
 		commit();
-		out = handleValueSuffixes(parseIfElse());
+		out = parseIfElse();
 		break;
 
 	case Symbol::s_left_bracket:
@@ -218,13 +218,13 @@ PNode Compiler::parseValue() {
 	default:
 		break;
 	}
-	return out;
+	return handleValueSuffixes(std::move(out));
 }
 
 PNode Compiler::parseIfElse() {
 	PNode cond = parseValue();
 	checkBeginBlock();
-	PNode blk1 = parseValue(); //TODO execute block
+	PNode blk1 = std::make_unique<ExecNode>(parseValue()); //TODO execute block
 	if (next().symbol == Symbol::kw_else) {
 		commit();
 		PNode blk2;
@@ -233,11 +233,11 @@ PNode Compiler::parseIfElse() {
 			blk2 = parseIfElse();
 		} else {
 			checkBeginBlock();
-			blk2 = parseValue();
+			blk2 = std::make_unique<ExecNode>(parseValue());
 		}
 		return std::make_unique<IfElseNode>(std::move(cond), std::move(blk1), std::move(blk2));
 	} else {
-		return std::make_unique<IfOnlyNode>(std::move(cond), std::move(blk1));
+		return std::make_unique<IfElseNode>(std::move(cond), std::move(blk1), std::move(std::make_unique<DirectCmdNode>(Cmd::push_null)));
 	}
 
 }
@@ -328,7 +328,6 @@ PNode Compiler::compileBlockContent() {
 	vm.push_scope(Value());
 
 	std::vector<PNode> nodes, code;
-	VarSet vs;
 	bool clear = true;
 
 
@@ -344,13 +343,7 @@ PNode Compiler::compileBlockContent() {
 			vm.push_task(std::make_unique<BlockExecution>(bk));
 			while (vm.run());
 			if (err) {
-				cmd->generateListVars(vs);
 				nodes.push_back(std::move(cmd));
-				/*if (curLine != lastLine) {
-					nodes.push_back(std::make_unique<UpdateLineNode>(curLine - lastLine));
-					lastLine = curLine;
-					//TODO map of lines
-				}*/
 			} else {
 				clear = false;
 			}
@@ -360,14 +353,11 @@ PNode Compiler::compileBlockContent() {
 		s = next();
 	}
 	Value variables = vm.scope_to_object();
-	bool allNeed = vs.find(nullptr) != vs.end();
 	for (Value x: variables) {
-		if (allNeed || vs.find(Value(x.getKey())) != vs.end()) {
 			code.push_back(
 				std::make_unique<Assignment>(
 						std::make_unique<SimpleAssignNode>(x.getKey()),
 						std::make_unique<ValueNode>(x)));
-		}
 
 	}
 	for (PNode &nd: nodes) {

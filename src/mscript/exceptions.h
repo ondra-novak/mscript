@@ -55,6 +55,28 @@ protected:
 	Value idx;
 };
 
+class MaxExecutionTimeReached: public VMException {
+public:
+	virtual void what(std::string &out) const override;
+};
+
+enum class LimitType {
+	calcStack,
+	taskStack,
+	scopeStack,
+};
+
+extern json::NamedEnum<LimitType> strLimitType;
+
+class ExecutionLimitReached: public VMException {
+public:
+	ExecutionLimitReached(LimitType t);
+	virtual void what(std::string &out) const override;
+protected:
+	LimitType t;
+
+};
+
 }
 
 

@@ -54,5 +54,23 @@ void ArgumentIsNotBlock::what(std::string &out) const {
 
 }
 
+void MaxExecutionTimeReached::what(std::string &out) const {
+	out = "Max execution time reached.";
+}
+
+json::NamedEnum<LimitType> strLimitType({
+	{LimitType::calcStack, "calc.stack"},
+	{LimitType::scopeStack, "recursion count - max scope count"},
+	{LimitType::taskStack, "recursion count - max task count"}
+});
+
+ExecutionLimitReached::ExecutionLimitReached(LimitType t):t(t) {
+
+}
+
+void ExecutionLimitReached::what(std::string &out) const {
+	out.append("ExecutionLimitReached: ");
+	out.append(strLimitType[t]);
+}
 
 }

@@ -152,7 +152,7 @@ void FunctionCall::generateListVars(VarSet &vars) const {
 }
 
 void FunctionCall::generateExpression(BlockBld &blk) const {
-	paramPack->generateExpression(blk);
+	paramPack->generateUnclosedExpression(blk);
 	fn->generateExpression(blk);
 	blk.pushInt(paramPack->count(), Cmd::call_fn_1);
 }
@@ -319,7 +319,7 @@ MethodCallNode::MethodCallNode(PNode &&left, Value identifier, PParamPackNode &&
 
 
 void MethodCallNode::generateExpression(BlockBld &blk) const {
-	pp->generateExpression(blk);					//<params>
+	pp->generateUnclosedExpression(blk);					//<params>
 	left->generateExpression(blk);					//<params> <object>
 	blk.pushCmd(Cmd::dup);							//<params> <object> <object>
 	blk.pushCmd(Cmd::push_scope_object);			//<params> <object> <object>   -> scope
