@@ -1,0 +1,11 @@
+for (I:9) {
+	print(switch I {
+		case 0,1: "Hello "
+		case 2: "world "
+		case 3: "Everything "
+		case 4: "is "
+		case 5: "fine"
+		default: "."	
+	})
+	
+}

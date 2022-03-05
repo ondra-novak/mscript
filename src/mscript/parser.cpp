@@ -62,6 +62,8 @@ json::NamedEnum<Symbol> strKeywords({
 	{Symbol::kw_while,"while"},
 	{Symbol::kw_for,"for"},
 	{Symbol::kw_this,"this"},
+	{Symbol::kw_switch,"switch"},
+	{Symbol::kw_constexpr,"constexpr"},
 	{Symbol::eof,"`end of file`"},
 	{Symbol::separator,"`new line`"},   // command separator - new line
 	{Symbol::unknown_symbol,"`unknown symbol`"}

@@ -6,6 +6,7 @@
  */
 
 #include "compiler.h"
+#include <unordered_map>
 
 namespace mscript {
 
@@ -214,6 +215,17 @@ PNode Compiler::parseValue() {
 	case Symbol::kw_this:
 		commit();
 		out = std::make_unique<ThisNode>();
+		break;
+	case Symbol::kw_switch:
+		commit();
+		out = compileSwitch();
+		break;
+	case Symbol::kw_constexpr:
+		commit(); {
+			Value v = expressionToConst();
+			if (v.type() == json::number) out = std::make_unique<NumberNode>(v);
+			else out = std::make_unique<ValueNode>(v);
+		}
 		break;
 	default:
 		throw compileError(std::string("Unexpected symbol: ").append(strKeywords[s.symbol]));
@@ -660,6 +672,65 @@ void Compiler::syncSeparator() {
 	} else if (s.symbol != Symbol::eof) {
 		throw compileError("Expected end of line or end of file");
 	}
+}
+
+PNode Compiler::compileSwitch() {
+	static Element case_elem = {Symbol::identifier,"case"};
+	static Element default_elem = {Symbol::identifier,"default"};
+	PNode selector = compileExpression();
+	auto s = next();
+	sync(Symbol::s_left_brace);
+	eatSeparators();
+	using ConstTable = std::unordered_map<Value, std::size_t>;
+	using NodeTable = std::vector<PNode>;
+	ConstTable ctbl;
+	NodeTable ndtbl;
+	PNode defaultNode;
+	while (next().symbol != Symbol::s_right_brace) {
+		eatSeparators();
+		auto s = next();
+		if (s == case_elem) {
+			bool cont;
+			do {
+				commit();
+				Value v = expressionToConst();
+				if (!ctbl.emplace(v, ndtbl.size()).second) {
+					throw compileError("switch-Duplicate label");
+				}
+				s = next();
+				cont = s.symbol == Symbol::s_comma;
+			} while (cont);
+			sync(Symbol::s_doublecolon);
+			ndtbl.push_back(compileBlockOrExpression());
+			syncSeparator();
+		} else if (s == default_elem) {
+			if (defaultNode != nullptr) throw compileError("switch-Duplicate default");
+			commit();
+			sync(Symbol::s_doublecolon);
+			defaultNode = compileBlockOrExpression();
+			syncSeparator();
+		} else {
+			throw compileError("Expected 'case' or 'default'");
+		}
+	}
+	commit();
+	if (ndtbl.empty()) {
+		if (defaultNode == nullptr) {
+			throw compileError("Empty switch structure");
+		} else {
+			return defaultNode;
+		}
+	} else {
+		return std::make_unique<SwitchCaseNode>(std::move(selector),SwitchCaseNode::Labels(ctbl.begin(), ctbl.end()), std::move(ndtbl), std::move(defaultNode));
+	}
+}
+
+Value Compiler::expressionToConst() {
+	PNode nd = compileBlockOrExpression();
+	Value code = packToValue(buildCode(nd, {loc.file, loc.line+curLine}));
+	VirtualMachine vm;
+	vm.setMaxExecutionTime(std::chrono::seconds(5));
+	return vm.exec(std::make_unique<BlockExecution>(code));
 }
 
 }

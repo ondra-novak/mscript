@@ -95,6 +95,8 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::op_mult_const_2,"MULT $2"},
 	{Cmd::op_mult_const_4,"MULT $4"},
 	{Cmd::op_mult_const_8,"MULT $8"},
+	{Cmd::op_cmp_eq_1,"EQ @1"},
+	{Cmd::op_cmp_eq_2,"EQ @2"},
 
 
 });
@@ -166,6 +168,8 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::op_cmp_less_eq: op_cmp(vm,[](int x){return x <= 0;});break;
 			case Cmd::op_cmp_greater_eq: op_cmp(vm,[](int x){return x >= 0;});break;
 			case Cmd::op_cmp_not_eq: op_cmp(vm,[](int x){return x != 0;});break;
+			case Cmd::op_cmp_eq_1: op_cmp_const(vm,load_int1());break;
+			case Cmd::op_cmp_eq_2: op_cmp_const(vm,load_int2());break;
 			case Cmd::op_bool_and: bin_op(vm,op_and);break;
 			case Cmd::op_bool_or: bin_op(vm,op_or);break;
 			case Cmd::op_bool_not: unar_op(vm,op_not);break;
@@ -280,6 +284,16 @@ void BlockExecution::bin_op_const(VirtualMachine &vm, std::int64_t val, Value (*
 	vm.push_value(fn(z,val));
 }
 
+void BlockExecution::op_cmp_const(VirtualMachine &vm, int idx) {
+	Value z = vm.top_value();
+	Value v = block.consts[idx];
+	if (v == z) {
+		vm.del_value();
+		vm.push_value(true);
+	} else {
+		vm.push_value(false);
+	}
+}
 
 Value BlockExecution::do_deref(const Value where, const Value &what) {
 	switch (what.type()) {

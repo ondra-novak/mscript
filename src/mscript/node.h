@@ -411,6 +411,20 @@ namespace mscript {
 		std::vector<Value> idents;
 	};
 
+	class SwitchCaseNode: public Expression {
+	public:
+		using Labels = std::vector<std::pair<Value, std::size_t> >;
+		using Nodes = std::vector<PNode>;
+		SwitchCaseNode(PNode &&selector, Labels &&labels, Nodes &&nodes, PNode &&defaultNode);
+	protected:
+		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
+		PNode selector;
+		Labels labels;
+		Nodes nodes;
+		PNode defNode;
+	};
+
 }
 
 

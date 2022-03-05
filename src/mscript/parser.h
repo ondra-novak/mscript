@@ -66,6 +66,8 @@ enum class Symbol {
 	kw_while,
 	kw_for,
 	kw_this,
+	kw_switch,
+	kw_constexpr,
 	eof,
 	separator,   // command separator - new line
 	unknown_symbol

@@ -82,6 +82,8 @@ protected:
 	PNode compileBlockOrExpression();
 	CompileError compileError(const std::string &text);
 	void syncSeparator();
+	PNode compileSwitch();
+	Value expressionToConst();
 };
 
 

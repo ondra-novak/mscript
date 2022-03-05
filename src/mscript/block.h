@@ -190,6 +190,7 @@ protected:
 	void bin_op(VirtualMachine &vm, Value (*fn)(const Value &a, const Value &b));
 	void unar_op(VirtualMachine &vm, Value (*fn)(const Value &a));
 	void op_cmp(VirtualMachine &vm, bool (*fn)(int z));
+	void op_cmp_const(VirtualMachine &vm, int idx);
 	void bin_op_const(VirtualMachine &vm, std::int64_t val, Value (*fn)(const Value &a, const Value &b));
 
 	void expand_param_pack(VirtualMachine &, std::intptr_t amount);

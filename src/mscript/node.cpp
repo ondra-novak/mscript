@@ -742,4 +742,57 @@ void OpMultNode::generateExpression(BlockBld &blk, const PNode &left, std::int64
 
 }
 
+SwitchCaseNode::SwitchCaseNode(PNode &&selector, Labels &&labels, Nodes &&nodes, PNode &&defaultNode)
+	:selector(std::move(selector)), labels(std::move(labels)),nodes(std::move(nodes)),defNode(std::move(defaultNode)) {}
+
+void SwitchCaseNode::generateExpression(BlockBld &blk) const {
+	selector->generateExpression(blk);
+	std::vector<std::size_t> lbofs;
+	std::vector<std::size_t> begins;
+	std::vector<std::size_t> jumps;
+	std::size_t defaultJump;
+	for (const auto &l: labels) {
+		blk.pushInt(blk.pushConst(l.first),Cmd::op_cmp_eq_1);
+		blk.pushCmd(Cmd::jump_true_2);
+		lbofs.push_back(blk.code.size());
+		blk.code.push_back(0);
+		blk.code.push_back(0);
+	}
+	blk.pushCmd(Cmd::del);
+	if (defNode != nullptr) {
+		defNode->generateExpression(blk);
+	}
+	blk.pushCmd(Cmd::jump_2);
+	defaultJump = blk.code.size();
+	blk.code.push_back(0);
+	blk.code.push_back(0);
+	for (const auto &n: nodes) {
+		begins.push_back(blk.code.size());
+		n->generateExpression(blk);
+		blk.pushCmd(Cmd::jump_2);
+		jumps.push_back(blk.code.size());
+		blk.code.push_back(0);
+		blk.code.push_back(0);
+	}
+	std::size_t endpos = blk.code.size();
+	for (auto x: jumps) {
+		blk.setInt2(endpos-x-2, x);
+	}
+	blk.setInt2(endpos-defaultJump-2, defaultJump);
+	std::size_t i = 0;
+	for (const auto &l: labels) {
+		auto p = lbofs[i];
+		i++;
+		auto q = begins[l.second];
+		blk.setInt2(q-p-2, p);
+	}
+
+}
+
+void SwitchCaseNode::generateListVars(VarSet &vars) const {
+	selector->generateListVars(vars);
+	if (defNode) defNode->generateListVars(vars);
+	for (const PNode &nd: nodes) nd->generateListVars(vars);
+}
+
 }
