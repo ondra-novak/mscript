@@ -8,8 +8,10 @@
 #include <cmath>
 #include <imtjson/serializer.h>
 #include <imtjson/string.h>
+#include "range.h"
 #include "block.h"
 #include "function.h"
+#include "dynmap.h"
 
 namespace mscript {
 
@@ -97,6 +99,7 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::op_mult_const_8,"MULT $8"},
 	{Cmd::op_cmp_eq_1,"EQ @1"},
 	{Cmd::op_cmp_eq_2,"EQ @2"},
+	{Cmd::op_mkrange,"MKRANGE"},
 
 
 });
@@ -187,6 +190,7 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::push_this: vm.push_value(vm.get_this());break;
 			case Cmd::push_undefined: vm.push_value(json::undefined);break;
 			case Cmd::op_unary_minus: unar_op(vm, op_unar_minus);break;
+			case Cmd::op_mkrange: bin_op(vm, op_mkrange);break;
 			case Cmd::push_array_1: do_push_array(vm, load_int1());break;
 			case Cmd::push_array_2: do_push_array(vm, load_int2());break;
 			case Cmd::push_array_4: do_push_array(vm, load_int4());break;
@@ -295,6 +299,15 @@ void BlockExecution::op_cmp_const(VirtualMachine &vm, int idx) {
 	}
 }
 
+Value BlockExecution::op_mkrange(const Value &a, const Value &b) {
+	auto begin = a.getInt();
+	auto end = b.getInt();
+	return newRange(begin, end);
+}
+
+
+
+
 Value BlockExecution::do_deref(const Value where, const Value &what) {
 	switch (what.type()) {
 		case json::number: return  where[what.getUInt()];break;
@@ -351,15 +364,6 @@ void BlockExecution::do_raise(VirtualMachine &vm) {
 	}
 }
 
-void BlockExecution::set_var_parampack(VirtualMachine &vm, std::intptr_t cindex) {
-	auto args = vm.top_params();
-	Value v = args[ir];
-	ir++;
-	auto name = block.consts[cindex].getString();
-	if (!vm.set_var(name, v)) {
-		variable_already_assigned(vm, name);
-	}
-}
 
 void BlockExecution::set_var(VirtualMachine &vm, std::intptr_t cindex) {
 	Value trg = block.consts[cindex];
@@ -408,6 +412,8 @@ Value BlockExecution::op_add(const Value &a, const Value &b) {
 		case json::undefined: return json::undefined;
 		case json::boolean: return a.getBool() || b.getBool();
 		case json::number:
+			if (b.isContainer())
+				    return newDynMap(b, [a](const Value &x){return op_add(a,x);});
 			if ((a.flags() & (json::numberInteger| json::numberUnsignedInteger))
 					&& (b.flags() & (json::numberInteger| json::numberUnsignedInteger))) {
 				return a.getIntLong()+b.getIntLong();
@@ -415,7 +421,9 @@ Value BlockExecution::op_add(const Value &a, const Value &b) {
 				return a.getNumber()+b.getNumber();
 			}
 		case json::string: return json::String({a.toString(),b.toString()});
-		case json::array: return a.merge(b);
+		case json::array:if (b.type() == json::number)
+						    return newDynMap(a, [b](const Value &x){return op_add(x,b);});
+							else return a.merge(b);
 		case json::object: return a.merge(b);
 		default: return nullptr;
 	}
@@ -428,12 +436,17 @@ Value BlockExecution::op_sub(const Value &a, const Value &b) {
 		case json::undefined: return json::undefined;
 		case json::boolean: return a.getBool() || (!b.getBool());
 		case json::number:
+			if (b.isContainer())
+				    return newDynMap(b, [a](const Value &x){return op_sub(a,x);});
 			if ((a.flags() & (json::numberInteger| json::numberUnsignedInteger))
 					&& (b.flags() & (json::numberInteger| json::numberUnsignedInteger))) {
 				return a.getIntLong()-b.getIntLong();
 			} else {
 				return a.getNumber()-b.getNumber();
 			}
+		case json::array: if (b.type() == json::number)
+							return newDynMap(a, [b](const Value &x){return op_div(x,b);});
+							else return nullptr;
 		case json::string: {
 			auto pos = a.getString().find(b.getString());
 			if (pos == a.getString().npos) return a;
@@ -449,7 +462,13 @@ Value BlockExecution::op_mult(const Value &a, const Value &b) {
 	switch (a.type()) {
 		case json::undefined: return json::undefined;
 		case json::boolean: return a.getBool() && b.getBool();
+		case json::object:
+		case json::array:if (b.type() == json::number)
+						    return newDynMap(a, [b](const Value &x){return op_mult(x,b);});
+							else return nullptr;
 		case json::number:
+			if (b.isContainer())
+			    return newDynMap(b, [a](const Value &x){return op_mult(x,a);});
 			if ((a.flags() & (json::numberInteger| json::numberUnsignedInteger))
 					&& (b.flags() & (json::numberInteger| json::numberUnsignedInteger))) {
 				return a.getIntLong() * b.getIntLong();
@@ -467,7 +486,14 @@ Value BlockExecution::op_div(const Value &a, const Value &b) {
 	switch (a.type()) {
 		case json::undefined: return json::undefined;
 		case json::boolean: return a.getBool() && !b.getBool();
-		case json::number: return a.getNumber() / b.getNumber();
+		case json::object:
+		case json::array: if (b.type() == json::number)
+							return newDynMap(a, [b](const Value &x){return op_div(x,b);});
+							else return nullptr;
+		case json::number:
+			if (b.isContainer())
+				return newDynMap(b, [a,one = Value(1.0)](const Value &x){return op_mult(op_div(one,x), a);});
+			return a.getNumber() / b.getNumber();
 		default: return nullptr;
 	}
 	return a;
@@ -586,16 +612,6 @@ void BlockExecution::expand_param_pack(VirtualMachine &vm, std::intptr_t amount)
 	vm.define_param_pack(amount);
 }
 
-void BlockExecution::set_var_arr_parampack(VirtualMachine &vm, std::intptr_t cindex) {
-	auto args = vm.top_params();
-	Value v (json::array, args.begin()+ir, args.end(), [](Value v){return v;});
-	ir = args.size();
-	auto name = block.consts[cindex].getString();
-	if (!vm.set_var(name, v)) {
-		variable_already_assigned(vm, name);
-	}
-
-}
 
 Value BlockExecution::op_unar_minus(const Value &a) {
 	switch(a.type()) {

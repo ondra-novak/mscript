@@ -1,0 +1,9 @@
+printnl((1..10)*2.5)
+printnl((1..10)/2)
+printnl(3.5*(1..10))
+printnl(10.0/(1..10))
+printnl((1..10)+10)
+printnl((1..10)-10)
+printnl(20+(1..10))
+printnl(20-(1..10))
+

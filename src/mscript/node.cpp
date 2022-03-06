@@ -39,7 +39,7 @@ void Identifier::generateAssign(BlockBld &blk) const {
 }*/
 
 void Identifier::generateExpression(BlockBld &blk) const {
-	blk.pushInt(blk.pushConst(name), Cmd::get_var_1);
+	blk.pushInt(blk.pushConst(name), Cmd::get_var_1,2);
 }
 
 ParamPackNode::ParamPackNode(PNode &&current, PNode &&nw) {
@@ -63,22 +63,25 @@ void ParamPackNode::generateUnclosedExpression(BlockBld &blk) const {
 }
 
 
-void BlockBld::pushInt(std::intptr_t val, Cmd cmd) {
+void BlockBld::pushInt(std::intptr_t val, Cmd cmd, int maxSize) {
 	if (cmd == Cmd::set_var_1) lastStorePos = code.size(); else lastStorePos = 0;
 	if (val >= -128 && val < 128) {
 		code.push_back(static_cast<std::uint8_t>(cmd));
 		code.push_back(static_cast<std::uint8_t>(val));
 	} else if (val >= -32768 && val < 32768) {
+		if (maxSize < 2) throw BuildError(std::string("Parameter too long (2 bytes) for such instruction:").append(strCmd[cmd]));
 		code.push_back(static_cast<std::uint8_t>(cmd)+1);
 		code.push_back(static_cast<std::uint8_t>(val>>8));
 		code.push_back(static_cast<std::uint8_t>(val & 0xFF));
 	} else if (val >= -2147483648 && val <= 2147483647) {
+		if (maxSize < 4) throw BuildError(std::string("Parameter too long (4 bytes) for such instruction:").append(strCmd[cmd]));
 		code.push_back(static_cast<std::uint8_t>(cmd)+2);
 		code.push_back(static_cast<std::uint8_t>(val>>24));
 		code.push_back(static_cast<std::uint8_t>((val>>16) & 0xFF));
 		code.push_back(static_cast<std::uint8_t>((val>>8) & 0xFF));
 		code.push_back(static_cast<std::uint8_t>(val & 0xFF));
 	} else {
+		if (maxSize < 8) throw BuildError(std::string("Parameter too long (8 bytes) for such instruction:").append(strCmd[cmd]));
 		code.push_back(static_cast<std::uint8_t>(cmd)+3);
 		code.push_back(static_cast<std::uint8_t>(val>>56));
 		code.push_back(static_cast<std::uint8_t>((val>>48) & 0xFF));
@@ -95,10 +98,6 @@ void BlockBld::pushCmd(Cmd cmd) {
 	code.push_back(static_cast<std::uint8_t>(cmd));
 }
 
-void BlockBld::setInt2(std::intptr_t val, std::size_t pos) {
-	code[pos] = static_cast<std::uint8_t>(val>>8);
-	code[pos+1] = static_cast<std::uint8_t>(val & 0xFF);
-}
 
 std::intptr_t BlockBld::pushConst(Value v) {
 	auto r = constMap.emplace(v, constMap.size());
@@ -135,7 +134,7 @@ NumberNode::NumberNode(Value n):n(n) {}
 
 void NumberNode::generateExpression(BlockBld &blk) const {
 	if (n.flags() & (json::numberInteger|json::numberUnsignedInteger)) {
-		blk.pushInt(n.getIntLong(), Cmd::push_int_1);
+		blk.pushInt(n.getIntLong(), Cmd::push_int_1,8);
 	} else {
 		blk.pushCmd(Cmd::push_double);
 		double v = n.getNumber();
@@ -154,13 +153,13 @@ void FunctionCall::generateListVars(VarSet &vars) const {
 void FunctionCall::generateExpression(BlockBld &blk) const {
 	paramPack->generateUnclosedExpression(blk);
 	fn->generateExpression(blk);
-	blk.pushInt(paramPack->count(), Cmd::call_fn_1);
+	blk.pushInt(paramPack->count(), Cmd::call_fn_1,2);
 }
 
 ValueNode::ValueNode(Value n):n(n) {}
 
 void ValueNode::generateExpression(BlockBld &blk) const {
-	blk.pushInt(blk.pushConst(n), Cmd::push_const_1);
+	blk.pushInt(blk.pushConst(n), Cmd::push_const_1,2);
 }
 
 void ParamPackNode::generateListVars(VarSet &vars) const {
@@ -203,8 +202,10 @@ std::size_t EmptyParamPackNode::count() const {
 
 void AbstractParamPackNode::generateExpression(BlockBld &blk) const {
 	generateUnclosedExpression(blk);
-	if (count() != 1) {
-		blk.pushInt(count(), infinite?Cmd::expand_param_pack_1:Cmd::def_param_pack_1);
+	if (infinite) {
+		blk.pushInt(count(), Cmd::expand_param_pack_1,2);
+	} else if (count() != 1) {
+		blk.pushInt(count(), Cmd::def_param_pack_1,2);
 	}
 
 }
@@ -267,48 +268,21 @@ IfElseNode::IfElseNode(PNode &&cond, PNode &&nd_then, PNode &&nd_else)
 
 void IfElseNode::generateExpression(BlockBld &blk) const {
 	cond->generateExpression(blk);   //<evaluate condition <bool>
-	blk.pushCmd(Cmd::jump_false_2);	 //will consume result and jumps
-	std::size_t lb1 = blk.code.size();	//mark code location for jump
-	blk.code.push_back(0);			  //reserve bytes
-	blk.code.push_back(0);				//reserve bytes
+	auto elsejmp = blk.prepareJump(Cmd::jump_false_1, 2);
 	nd_then->generateExpression(blk);	//generate then expression
-	blk.pushCmd(Cmd::jump_2);			//unconditional jump
-	std::size_t lb2 = blk.code.size();	//mark code location
-	blk.code.push_back(0);				//reserve bytes
-	blk.code.push_back(0);				//reserve bytes
-	std::size_t lb3 = blk.code.size();	//mark code location
+	auto thenjmp = blk.prepareJump(Cmd::jump_1, 2);
+	blk.finishJumpHere(elsejmp, 2);
 	nd_else->generateExpression(blk);	//generate else expression
-	std::size_t lb4 = blk.code.size();	//mark code location
-	auto dist1 = lb3-lb1-2;				//create relative distance (relative jump)
-	auto dist2 = lb4-lb2-2;				//create relative distance
-	if (dist1 > 0x7FFF || dist2 > 0x7FFF) throw std::runtime_error("Branch is too long (virtual machine supports max 32kB per branch)");
-	blk.setInt2(dist1, lb1);			//update distance
-	blk.setInt2(dist2, lb2);			//update distance
+	blk.finishJumpHere(thenjmp, 2);
 }
 
-IfOnlyNode::IfOnlyNode(PNode &&cond, PNode &&nd_then)
-:cond(std::move(cond)),nd_then(std::move(nd_then)) {}
-
-
-void IfOnlyNode::generateExpression(BlockBld &blk) const {
-	cond->generateExpression(blk);   //<evaluate condition <bool>
-	blk.pushCmd(Cmd::jump_false_2);	 //will consume result and jumps
-	std::size_t lb1 = blk.code.size();	//mark code location for jump
-	blk.code.push_back(0);			  //reserve bytes
-	blk.code.push_back(0);				//reserve bytes
-	nd_then->generateExpression(blk);	//generate then expression
-	std::size_t lb2 = blk.code.size();	//mark code location
-	auto dist1 = lb2-lb1-2;				//create relative distance (relative jump)
-	if (dist1 > 0x7FFF) throw std::runtime_error("Branch is too long (virtual machine supports max 32kB per branch)");
-	blk.setInt2(dist1, lb1);			//update distance
-}
 
 DerefernceNode::DerefernceNode(PNode &&left, PNode &&right)
 	:BinaryOperation(std::move(left), std::move(right), Cmd::deref) {}
 
 void DerefernceDotNode::generateExpression(BlockBld &blk) const {
 	left->generateExpression(blk);
-	blk.pushInt(blk.pushConst(identifier), Cmd::deref_1);
+	blk.pushInt(blk.pushConst(identifier), Cmd::deref_1,2);
 
 }
 DerefernceDotNode::DerefernceDotNode(PNode &&left, Value identifier)
@@ -323,8 +297,8 @@ void MethodCallNode::generateExpression(BlockBld &blk) const {
 	left->generateExpression(blk);					//<params> <object>
 	blk.pushCmd(Cmd::dup);							//<params> <object> <object>
 	blk.pushCmd(Cmd::push_scope_object);			//<params> <object> <object>   -> scope
-	blk.pushInt(blk.pushConst(identifier), Cmd::deref_fn_1);	//<params> <function>    -> <object>.<identifier>
-	blk.pushInt(pp->count(), Cmd::call_fn_1);		//<result>
+	blk.pushInt(blk.pushConst(identifier), Cmd::deref_fn_1,2);	//<params> <function>    -> <object>.<identifier>
+	blk.pushInt(pp->count(), Cmd::call_fn_1,2);		//<result>
 	blk.pushCmd(Cmd::pop_scope);					//<result>
 }
 
@@ -437,7 +411,7 @@ void PushArrayNode::generateExpression(BlockBld &blk) const {
 	for (const PNode &nd: code) {
 		nd->generateExpression(blk);
 	}
-	blk.pushInt(code.size(), Cmd::push_array_1);
+	blk.pushInt(code.size(), Cmd::push_array_1,4);
 }
 
 BooleanAndOrNode::BooleanAndOrNode(PNode &&left, PNode &&right,bool and_node):left(std::move(left)),right(std::move(right)),and_node(and_node) {
@@ -446,14 +420,10 @@ BooleanAndOrNode::BooleanAndOrNode(PNode &&left, PNode &&right,bool and_node):le
 void BooleanAndOrNode::generateExpression(BlockBld &blk) const {
 	left->generateExpression(blk);
 	blk.pushCmd(Cmd::dup);
-	blk.pushCmd(and_node?Cmd::jump_false_2:Cmd::jump_true_2);
-	std::size_t pos = blk.code.size();
-	blk.code.push_back(0);
-	blk.code.push_back(0);
+	auto l1 = blk.prepareJump(and_node?Cmd::jump_false_1:Cmd::jump_true_1, 2);
 	blk.pushCmd(Cmd::del);
 	right->generateExpression(blk);
-	auto dist = blk.code.size() - pos -2;
-	blk.setInt2(dist, pos);
+	blk.finishJumpHere(l1, 2);
 }
 
 ForLoopNode::ForLoopNode(Value iterator, PNode &&container, std::vector<std::pair<Value,PNode> > &&init, PNode &&block)
@@ -521,46 +491,38 @@ public:
 void ForLoopNode::generateExpression(BlockBld &blk) const {
 	block->generateExpression(blk);
 	container->generateExpression(blk);
-	blk.pushInt(blk.pushConst(iterator), Cmd::push_const_1);
+	blk.pushInt(blk.pushConst(iterator), Cmd::push_const_1,2);
 	for (const auto &x: init) {
 		x.second->generateExpression(blk);
-		blk.pushInt(blk.pushConst(x.first), Cmd::push_const_1);
+		blk.pushInt(blk.pushConst(x.first), Cmd::push_const_1,2);
 	}
 	static Value forLoopFn = defineFunction([](VirtualMachine &vm, Value closure){
 		return std::make_unique<ForLoopFnTask>();
 	});
-	blk.pushInt(blk.pushConst(forLoopFn), Cmd::push_const_1);
-	blk.pushInt(init.size()*2+3, Cmd::call_fn_1);
+	blk.pushInt(blk.pushConst(forLoopFn), Cmd::push_const_1,2);
+	blk.pushInt(init.size()*2+3, Cmd::call_fn_1,2);
 
 
 }
 
-WhileLoopNode::WhileLoopNode(PNode &&condition, PNode &&block):condition(std::move(condition)),block(std::move(block)) {
+WhileLoopNode::WhileLoopNode(PNode &&condition, PNode &&block):ExecNode(std::move(block)),condition(std::move(condition)) {
 }
 
 void WhileLoopNode::generateExpression(BlockBld &blk) const {
-	condition->generateExpression(blk); //<condition>
-	blk.pushCmd(Cmd::jump_false_2);		//.... jumps if false
 	blk.pushCmd(Cmd::push_null);		//<retval>
-	std::intptr_t lb1 = blk.code.size();
-	blk.code.push_back(0);
-	blk.code.push_back(0);
+	condition->generateExpression(blk); //<retval> <condition>
+	auto skp = blk.prepareJump(Cmd::jump_false_1, 2);
 	blk.pushCmd(Cmd::push_null);		//<retval> <scope>
-	std::intptr_t lb2 = blk.code.size();    //<retval> <scope>
+	auto rephere = blk.code.size();
 	blk.pushCmd(Cmd::push_scope_object);	//<retval>
 	blk.pushCmd(Cmd::del);					//
-	block->generateExpression(blk);			//<block>
-	blk.pushCmd(Cmd::exec_block);			//<retval>
+	ExecNode::generateExpression(blk);		//<retval>
 	blk.pushCmd(Cmd::scope_to_object);		//<retval> <scope>
+	blk.pushCmd(Cmd::pop_scope);
 	condition->generateExpression(blk);		//<retval> <scope> <condition>
-	blk.pushCmd(Cmd::jump_true_2);			//<retval> <scope>   ... jumps if true
-	std::intptr_t lb3 = blk.code.size();
-	blk.code.push_back(0);
-	blk.code.push_back(0);
+	blk.finishJumpTo(blk.prepareJump(Cmd::jump_true_1, 2), rephere, 2); //<retval><scope>
 	blk.pushCmd(Cmd::del);					//<retval>
-	std::intptr_t lb4 = blk.code.size();	//<retval>
-	blk.setInt2(lb4-lb1-2, lb1);
-	blk.setInt2(lb2-lb3-2, lb3);
+	blk.finishJumpHere(skp, 2);
 }
 
 
@@ -568,7 +530,7 @@ SimpleAssignNode::SimpleAssignNode(Value ident):ident(ident) {
 }
 
 void SimpleAssignNode::generateExpression(BlockBld &blk) const {
-	blk.pushInt(blk.pushConst(ident.toString()), Cmd::set_var_1);
+	blk.pushInt(blk.pushConst(ident.toString()), Cmd::set_var_1,2);
 }
 
 PackAssignNode::PackAssignNode(std::vector<Value> &&idents):idents(std::move(idents)) {
@@ -578,7 +540,7 @@ PackAssignNode::PackAssignNode(std::vector<Value> &&idents):idents(std::move(ide
 void PackAssignNode::generateExpression(BlockBld &blk) const {
 	blk.pushInt(blk.pushConst(Value(json::array,
 			idents.begin(),
-			idents.end(),[](Value x){return x;})), Cmd::set_var_1);
+			idents.end(),[](Value x){return x;})), Cmd::set_var_1,2);
 }
 
 void ConstantLeaf::generateListVars(VarSet &vars) const {
@@ -619,10 +581,6 @@ void IfElseNode::generateListVars(VarSet &vars) const {
 	nd_else->generateListVars(vars);
 }
 
-void IfOnlyNode::generateListVars(VarSet &vars) const {
-	cond->generateListVars(vars);
-	nd_then->generateListVars(vars);
-}
 
 void DerefernceDotNode::generateListVars(VarSet &vars) const {
 	left->generateListVars(vars);
@@ -660,14 +618,14 @@ void ForLoopNode::generateListVars(VarSet &vars) const {
 
 void WhileLoopNode::generateListVars(VarSet &vars) const {
 	condition->generateListVars(vars);
-	block->generateListVars(vars);
+	ExecNode::generateListVars(vars);
 }
 
 IsDefinedNode::IsDefinedNode(Value ident):ident(ident) {
 }
 
 void IsDefinedNode::generateExpression(BlockBld &blk) const {
-	blk.pushInt(blk.pushConst(ident), Cmd::is_def_1);
+	blk.pushInt(blk.pushConst(ident), Cmd::is_def_1,2);
 }
 
 BlockValueNode::BlockValueNode(Value n, PNode &&blockTree):ValueNode(n),blockTree(std::move(blockTree)) {
@@ -705,12 +663,12 @@ OpAddNode::OpAddNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move
 
 void OpAddNode::generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const {
 	right->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_add_const_1);
+	blk.pushInt(n, Cmd::op_add_const_1,2);
 }
 
 void OpAddNode::generateExpression(BlockBld &blk, const PNode &left, std::int64_t n) const {
 	left->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_add_const_1);
+	blk.pushInt(n, Cmd::op_add_const_1,2);
 }
 
 OpSubNode::OpSubNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move(left),std::move(right), Cmd::op_sub) {
@@ -718,13 +676,13 @@ OpSubNode::OpSubNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move
 
 void OpSubNode::generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const {
 	right->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_negadd_const_1);
+	blk.pushInt(n, Cmd::op_negadd_const_1,2);
 
 }
 
 void OpSubNode::generateExpression(BlockBld &blk, const PNode &left, std::int64_t n) const {
 	left->generateExpression(blk);
-	blk.pushInt(-n, Cmd::op_add_const_1);
+	blk.pushInt(-n, Cmd::op_add_const_1,2);
 }
 
 OpMultNode::OpMultNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move(left),std::move(right), Cmd::op_mult) {
@@ -732,13 +690,13 @@ OpMultNode::OpMultNode(PNode &&left, PNode &&right):BinaryConstOperation(std::mo
 
 void OpMultNode::generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const {
 	right->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_mult_const_1);
+	blk.pushInt(n, Cmd::op_mult_const_1,2);
 
 }
 
 void OpMultNode::generateExpression(BlockBld &blk, const PNode &left, std::int64_t n) const {
 	left->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_mult_const_1);
+	blk.pushInt(n, Cmd::op_mult_const_1,2);
 
 }
 
@@ -750,41 +708,28 @@ void SwitchCaseNode::generateExpression(BlockBld &blk) const {
 	std::vector<std::size_t> lbofs;
 	std::vector<std::size_t> begins;
 	std::vector<std::size_t> jumps;
-	std::size_t defaultJump;
 	for (const auto &l: labels) {
-		blk.pushInt(blk.pushConst(l.first),Cmd::op_cmp_eq_1);
-		blk.pushCmd(Cmd::jump_true_2);
-		lbofs.push_back(blk.code.size());
-		blk.code.push_back(0);
-		blk.code.push_back(0);
+		blk.pushInt(blk.pushConst(l.first),Cmd::op_cmp_eq_1,2);
+		lbofs.push_back(blk.prepareJump(Cmd::jump_true_1, 2));
 	}
-	blk.pushCmd(Cmd::del);
 	if (defNode != nullptr) {
+		blk.pushCmd(Cmd::del);
 		defNode->generateExpression(blk);
 	}
-	blk.pushCmd(Cmd::jump_2);
-	defaultJump = blk.code.size();
-	blk.code.push_back(0);
-	blk.code.push_back(0);
+	auto skp = blk.prepareJump(Cmd::jump_1, 2);
 	for (const auto &n: nodes) {
 		begins.push_back(blk.code.size());
 		n->generateExpression(blk);
-		blk.pushCmd(Cmd::jump_2);
-		jumps.push_back(blk.code.size());
-		blk.code.push_back(0);
-		blk.code.push_back(0);
+		jumps.push_back(blk.prepareJump(Cmd::jump_1, 2));
 	}
-	std::size_t endpos = blk.code.size();
 	for (auto x: jumps) {
-		blk.setInt2(endpos-x-2, x);
+		blk.finishJumpHere(x, 2);
 	}
-	blk.setInt2(endpos-defaultJump-2, defaultJump);
+	blk.finishJumpHere(skp, 2);
 	std::size_t i = 0;
 	for (const auto &l: labels) {
-		auto p = lbofs[i];
+		blk.finishJumpTo(lbofs[i], begins[l.second], 2);
 		i++;
-		auto q = begins[l.second];
-		blk.setInt2(q-p-2, p);
 	}
 
 }
@@ -793,6 +738,41 @@ void SwitchCaseNode::generateListVars(VarSet &vars) const {
 	selector->generateListVars(vars);
 	if (defNode) defNode->generateListVars(vars);
 	for (const PNode &nd: nodes) nd->generateListVars(vars);
+}
+
+std::size_t BlockBld::prepareJump(Cmd cmd, int sz) {
+	switch(sz) {
+	case 1: pushCmd(cmd);break;
+	case 2: pushCmd(static_cast<Cmd>(static_cast<int>(cmd)+1));break;
+	case 4: pushCmd(static_cast<Cmd>(static_cast<int>(cmd)+2));break;
+	case 8: pushCmd(static_cast<Cmd>(static_cast<int>(cmd)+3));break;
+	default: throw BuildError("Invalid jump size (allowed: 1,2,4,8)");
+	}
+	std::size_t out = code.size();
+	for (int i = 0; i < sz; i++) {
+		code.push_back(0);
+	}
+	return out;
+
+}
+
+void BlockBld::finishJumpHere(std::size_t jmpPos, int sz) {
+	finishJumpTo(jmpPos, code.size(), sz);
+}
+
+void BlockBld::finishJumpTo(std::size_t jmpPos, std::size_t targetPos, int sz) {
+	std::intptr_t distance = targetPos;
+	distance -= jmpPos;
+	distance -= sz;
+	if (!(distance >= -128 && distance < 128)
+		&&(((distance >= -32768 && distance < 32768) && (sz < 2))
+			|| ((distance >= -2147483648 && distance <= 2147483647) && (sz < 4))
+			|| (sz < 8))) throw BuildError("Jump is too far");
+	for (int i = 0; i < sz; i++) {
+		int shift = 8*(sz - i - 1);
+		std::intptr_t x = distance >> shift;
+		code[jmpPos+i] = x & 0xFF;
+	}
 }
 
 }

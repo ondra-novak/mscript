@@ -67,6 +67,7 @@ protected:
 	PNode compileBlock();
 	PNode compileCommand();
 	PNode compileExpression();
+	PNode compileRange();
 	PNode compileAnd();
 	PNode compileOr();
 	PNode compileCompare();
@@ -84,6 +85,7 @@ protected:
 	void syncSeparator();
 	PNode compileSwitch();
 	Value expressionToConst();
+	PNode compileNumber();
 };
 
 

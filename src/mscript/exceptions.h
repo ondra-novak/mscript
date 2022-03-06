@@ -88,6 +88,14 @@ protected:
 	CodeLocation loc;
 };
 
+class BuildError: public VMException {
+public:
+	BuildError(const std::string &text);
+protected:
+	virtual void what(std::string &out) const override;
+	std::string text;
+};
+
 }
 
 

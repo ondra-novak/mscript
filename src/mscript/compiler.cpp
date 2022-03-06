@@ -112,8 +112,7 @@ PNode Compiler::parseValue() {
 		else out = std::move(out);
 		break;
 	case Symbol::number:
-		commit();
-		out = std::make_unique<NumberNode>(s.data);
+		out = compileNumber();
 		break;
 	case Symbol::string:
 		commit();
@@ -188,8 +187,9 @@ PNode Compiler::parseValue() {
 	case Symbol::s_minus:
 		commit();
 		if (next().symbol == Symbol::number) {
-			out = std::make_unique<NumberNode>(-next().data.getNumber());
-			commit();
+			auto c = compileNumber();
+			auto d = static_cast<const NumberNode *>(c.get());
+			out = std::make_unique<NumberNode>(-(d->getValue().getNumber()));
 		} else {
 			out = std::make_unique<UnaryOperation>(parseValue(),Cmd::op_unary_minus);
 		}
@@ -512,7 +512,7 @@ PNode Compiler::compileAnd() {
 }
 
 PNode Compiler::compileCompare() {
-	PNode nd = compileAddSub();
+	PNode nd = compileRange();
 	Cmd cmd;
 	switch(next().symbol) {
 	case Symbol::s_dequal:
@@ -669,7 +669,7 @@ void Compiler::syncSeparator() {
 	auto s= next();
 	if (s.symbol == Symbol::separator) {
 		commit();
-	} else if (s.symbol != Symbol::eof) {
+	} else if (s.symbol != Symbol::eof && s.symbol != Symbol::s_right_brace) {
 		throw compileError("Expected end of line or end of file");
 	}
 }
@@ -709,20 +709,30 @@ PNode Compiler::compileSwitch() {
 			sync(Symbol::s_doublecolon);
 			defaultNode = compileBlockOrExpression();
 			syncSeparator();
+		} else if (s.symbol == Symbol::s_right_brace) {
+			break;
 		} else {
 			throw compileError("Expected 'case' or 'default'");
 		}
 	}
 	commit();
 	if (ndtbl.empty()) {
-		if (defaultNode == nullptr) {
-			throw compileError("Empty switch structure");
-		} else {
-			return defaultNode;
-		}
+		if (defaultNode == nullptr) return selector;
+		return defaultNode;
 	} else {
 		return std::make_unique<SwitchCaseNode>(std::move(selector),SwitchCaseNode::Labels(ctbl.begin(), ctbl.end()), std::move(ndtbl), std::move(defaultNode));
 	}
+}
+
+PNode Compiler::compileRange() {
+	PNode nd = compileAddSub();
+	if (next().symbol == Symbol::s_twodots) {
+		commit();
+		return std::make_unique<BinaryOperation>(std::move(nd),compileAddSub(), Cmd::op_mkrange);
+	} else {
+		return nd;
+	}
+
 }
 
 Value Compiler::expressionToConst() {
@@ -731,6 +741,87 @@ Value Compiler::expressionToConst() {
 	VirtualMachine vm;
 	vm.setMaxExecutionTime(std::chrono::seconds(5));
 	return vm.exec(std::make_unique<BlockExecution>(code));
+}
+
+PNode Compiler::compileNumber() {
+	std::string buffer;
+	buffer.append(next().data.getString());
+	commit();
+	Value res;
+	bool dbl = false;
+	auto s = next();
+	while (s.symbol == Symbol::number) {
+		buffer.append(next().data.getString());
+		commit();
+		s = next();
+	}
+	if (s.symbol == Symbol::s_dot) {
+		commit();
+		s = next();
+		if (s.symbol == Symbol::number) {
+			buffer.push_back('.');
+			buffer.append(s.data.getString());
+			dbl = true;
+			commit();
+			s = next();
+			while (s.symbol == Symbol::number) {
+				buffer.append(next().data.getString());
+				commit();
+				s = next();
+			}
+
+		}
+	}
+	s = next();
+	if (s.symbol == Symbol::identifier) {
+		std::string_view eval = s.data.getString();
+		if (eval.length() == 1 &&  std::toupper(eval[0]) == 'E') {
+			commit();
+			s = next();
+			buffer.append(eval);
+			switch (s.symbol) {
+			case Symbol::s_plus: buffer.push_back('+'); commit(); break;
+			case Symbol::s_minus: buffer.push_back('-'); commit(); break;
+			default: break;
+			}
+			s =next();
+			if (s.symbol != Symbol::number) {
+				compileError("Invalid number format");
+			}
+			buffer.append(s.data.getString());
+			commit();
+			dbl = true;
+			s = next();
+			while (s.symbol == Symbol::number) {
+				buffer.append(next().data.getString());
+				commit();
+				s = next();
+			}
+		} else if (eval.length() > 1 &&  std::toupper(eval[0]) == 'E') {
+			commit();
+			buffer.push_back(eval[0]);
+			eval = eval.substr(1);
+			for (char c: eval) {
+				if (!isdigit(c)) {
+					compileError("Invalid number format, digits are expected");
+				}
+			}
+			buffer.append(eval);
+			dbl = true;
+			s = next();
+			while (s.symbol == Symbol::number) {
+				buffer.append(next().data.getString());
+				commit();
+				s = next();
+			}
+		}
+	}
+	if (dbl) {
+		res =strtod(buffer.c_str(),nullptr);
+	} else {
+		res = strtoull(buffer.c_str(),nullptr, 10);
+	}
+	return std::make_unique<NumberNode>(res);
 }
 
 }

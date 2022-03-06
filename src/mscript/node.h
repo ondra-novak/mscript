@@ -16,11 +16,14 @@ namespace mscript {
 	struct BlockBld {
 		std::unordered_map<Value, std::intptr_t> constMap;
 		std::vector<std::uint8_t> code;
-		void pushInt(std::intptr_t val, Cmd cmd);
+		void pushInt(std::intptr_t val, Cmd cmd, int maxSize);
 		void pushCmd(Cmd cmd);
-		void setInt2(std::intptr_t val, std::size_t pos);
 		std::intptr_t pushConst(Value v);
 		std::size_t lastStorePos;
+
+		std::size_t prepareJump(Cmd cmd, int sz);
+		void finishJumpHere(std::size_t jmpPos, int sz);
+		void finishJumpTo(std::size_t jmpPos, std::size_t targetPos, int sz);
 	};
 
 
@@ -277,15 +280,6 @@ namespace mscript {
 		PNode nd_else;
 	};
 
-	class IfOnlyNode: public Expression {
-	public:
-		IfOnlyNode(PNode &&cond, PNode &&nd_then);
-		virtual void generateExpression(BlockBld &blk) const override;
-		virtual void generateListVars(VarSet &vars) const override;
-	protected:
-		PNode cond;
-		PNode nd_then;
-	};
 
 	class DerefernceNode: public BinaryOperation {
 	public:
@@ -360,14 +354,13 @@ namespace mscript {
 		std::vector<std::pair<Value,PNode>> init;
 	};
 
-	class WhileLoopNode: public Expression {
+	class WhileLoopNode: public ExecNode {
 	public:
 		WhileLoopNode(PNode &&condition, PNode &&block);
 		virtual void generateExpression(BlockBld &blk) const override;
 		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode condition;
-		PNode block;
 	};
 
 

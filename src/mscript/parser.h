@@ -175,8 +175,15 @@ public:
 						if (kw) return {*kw};
 						return {Symbol::identifier, buffer};
 					} else if (isdigit(c)) {
-						this->rd.putBack(c);
-						return {Symbol::number,this->parseNumber()};
+						buffer.clear();
+						buffer.push_back(c);
+						c = this->rd.next();
+						while (isdigit(c)) {
+							buffer.push_back(c);
+							this->rd.commit();
+							c = this->rd.next();
+						}
+						return {Symbol::number, buffer};
 					} else {
 						throw json::ParseError("Unknown symbol", c);
 					}

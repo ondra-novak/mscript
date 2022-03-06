@@ -1,8 +1,7 @@
 (A,B,-,C)=(1,2,3,4) # mapovani vysledku na promenne 
 (D)=(5,50)      # vysledku je vice nez promennych
-E=(10,A,20,B)   # prirazeni vice vysledku jedne promenne - prevede se na pole
+E?=(10,A,20,B)   # prirazeni vice vysledku jedne promenne - prevede se na pole
 (F,G)=(30)      # promennych je vic nez vysledku
 H=()			# prazdny pack se ulozi jako prazdne pole
 (-,-,I)=(E...)  # expanze pole na pack a vyzobnutí třetí položky do proměnné
-exec nonexists
 (A,B,C,D,E,F,G,H,I)

@@ -87,6 +87,7 @@ enum class Cmd:std::uint8_t{
 	op_power,
 	op_unary_minus,
 	op_mod,
+	op_mkrange,
 	op_cmp_eq_1,		//<compare with constant - replace value with true if equal, push false, if not
 	op_cmp_eq_2,		//<compare with constant - replace value with true if equal, push false, if not
 
@@ -183,8 +184,6 @@ protected:
 	void call_method(VirtualMachine &vm, std::intptr_t param_pack_size);
 	void exec_block(VirtualMachine &vm);
 	void do_raise(VirtualMachine &vm);
-	void set_var_parampack(VirtualMachine &vm, std::intptr_t cindex);
-	void set_var_arr_parampack(VirtualMachine &vm, std::intptr_t cindex);
 	void set_var(VirtualMachine &vm, std::intptr_t cindex);
 
 	void bin_op(VirtualMachine &vm, Value (*fn)(const Value &a, const Value &b));
@@ -213,6 +212,7 @@ protected:
 	static Value op_and(const Value &a, const Value &b);
 	static Value op_or(const Value &a, const Value &b);
 	static Value op_power(const Value &a, const Value &b);
+	static Value op_mkrange(const Value &a, const Value &b);
 	static Value op_not(const Value &a);
 	static Value op_unar_minus(const Value &a);
 

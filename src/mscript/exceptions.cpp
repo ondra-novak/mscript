@@ -84,4 +84,11 @@ void CompileError::what(std::string &out) const {
 	out.append(text);
 }
 
+void BuildError::what(std::string &out) const {
+	out = text;
+}
+
+BuildError::BuildError(const std::string &text):text(text) {
+}
+
 }

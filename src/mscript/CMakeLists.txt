@@ -9,6 +9,7 @@ add_library (mscript
 	node.cpp
 	compiler.cpp
 	parser.cpp
+	range.cpp
 )
 
 

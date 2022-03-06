@@ -3,4 +3,3 @@ obj= object {
 	b=20
 	ahoj="svete"
 }
-obj.b(10,20)
