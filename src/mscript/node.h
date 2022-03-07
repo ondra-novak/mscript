@@ -342,7 +342,7 @@ namespace mscript {
 	};
 
 
-	class ForLoopNode: public Expression {
+	class ForLoopNode: public ExecNode {
 	public:
 		ForLoopNode(Value iterator, PNode &&container, std::vector<std::pair<Value,PNode> > &&init, PNode &&block);
 		virtual void generateExpression(BlockBld &blk) const override;
@@ -350,7 +350,6 @@ namespace mscript {
 	protected:
 		Value iterator;
 		PNode container;
-		PNode block;
 		std::vector<std::pair<Value,PNode>> init;
 	};
 

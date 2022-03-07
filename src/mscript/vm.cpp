@@ -20,7 +20,7 @@ Value Scope::create_parent_link() {
 	return {convertToObject(), parentLink};
 }
 
-Value Scope::convertToObject() {
+Value Scope::convertToObject() const {
 	json::Object obj(base);
 	for (const auto &x: items) {
 		obj.set(x.first, x.second);
@@ -36,7 +36,6 @@ void VirtualMachine::reset() {
 	taskStack.clear();
 	calcStack.clear();
 	scopeStack.clear();
-	paramPack = 0;
 	exp = nullptr;
 
 }
@@ -112,11 +111,20 @@ bool VirtualMachine::set_var(const std::string_view &name, const Value &value) {
 
 void VirtualMachine::define_param_pack(std::size_t arguments) {
 	collapse_param_pack();
-	paramPack = std::min(calcStack.size(),arguments);
+	auto paramPack = std::min(calcStack.size(),arguments);
+	if (paramPack != 1) {
+		auto newsz = calcStack.size()-paramPack;
+		auto pv = ValueListValue::create(paramPack);
+		for (auto i = newsz; i < calcStack.size(); i++) {
+			pv->push_back(calcStack[i].getHandle());
+		}
+		calcStack.resize(newsz);
+		push_value(json::PValue::staticCast(pv));
+	}
 }
 
-ParamPack VirtualMachine::top_params() const {
-	return ParamPack(calcStack.data()+calcStack.size()-paramPack, paramPack);
+ValueList VirtualMachine::top_params() const {
+	return ValueList(calcStack.empty()?Value():calcStack.back());
 }
 
 void VirtualMachine::raise(std::exception_ptr e) {
@@ -155,14 +163,7 @@ bool Scope::set(const std::string_view &name, const Value &v) {
 }
 
 Value VirtualMachine::top_value() const {
-	switch (paramPack) {
-		case 0: return json::array;
-		case 1: return calcStack.empty()?Value():calcStack.back();
-		default: {
-			ParamPack pk = top_params();
-			return Value(json::array, pk.begin(), pk.end(), [](const Value &v){return v;});
-		}
-	}
+	return calcStack.empty()?Value():ValueList(calcStack.back()).toValue();
 }
 
 Value VirtualMachine::pop_value() {
@@ -172,21 +173,12 @@ Value VirtualMachine::pop_value() {
 }
 
 void VirtualMachine::del_value() {
-	switch(paramPack) {
-		case 0: break;
-		case 1: if (!calcStack.empty()) calcStack.pop_back(); break;
-		default: for (std::size_t i = 0; i < paramPack; i++) {
-			calcStack.pop_back();
-		}
-	}
-	paramPack = std::min<std::size_t>(1, calcStack.size());
+	if (!calcStack.empty()) calcStack.pop_back();
 }
 
 void VirtualMachine::push_value(const Value &val) {
 	if (calcStack.size()>=cfg.maxCalcStack) throw ExecutionLimitReached(LimitType::calcStack);
-	if (paramPack>1) collapse_param_pack();
 	calcStack.push_back(val);
-	paramPack = 1;
 }
 
 Value VirtualMachine::get_this() {
@@ -213,24 +205,19 @@ bool VirtualMachine::restore_state(const VMState &st) {
 VirtualMachine::VMState VirtualMachine::save_state() const {
 	VMState res;
 	res.scopes = scopeStack.size();
-	if (paramPack != 1) {
-		auto top = top_params();
-		res.paramPack.emplace(top.begin(), top.end());
-		res.values = calcStack.size()-paramPack;
-	} else {
-		res.values = calcStack.size();
-	}
+	res.values = calcStack.size();
 	return res;
 }
 
 void VirtualMachine::dup_value() {
-	if (paramPack != 1) {
-		Value x = pop_value();
-		push_value(x);
-		push_value(x);
-	} else {
-		push_value(top_value());
+	push_value(top_value());
+}
+
+void VirtualMachine::dup_value(std::size_t idx) {
+	if (idx >= calcStack.size()) {
+		throw std::runtime_error("dup_value argument out of range");
 	}
+	push_value(calcStack[calcStack.size()-idx-1]);
 }
 
 std::optional<CodeLocation> VirtualMachine::getCodeLocation() const {
@@ -249,6 +236,14 @@ void VirtualMachine::swap_value() {
 	push_value(x);
 }
 
+void VirtualMachine::swap_value(std::size_t idx) {
+	if (idx >= calcStack.size()) {
+		throw std::runtime_error("swap_value argument out of range");
+	}
+	std::swap(calcStack.back(), calcStack[calcStack.size()-idx-1]);
+}
+
+
 Value VirtualMachine::scope_to_object() {
 	if (scopeStack.empty()) return json::Value();
 	return scopeStack.back().convertToObject();
@@ -265,18 +260,14 @@ std::vector<CodeLocation> VirtualMachine::getExceptionCodeLocation() const {
 }
 
 void VirtualMachine::collapse_param_pack() {
-	switch(paramPack) {
-		case 0: push_value(json::array);paramPack = 1; break;
-		case 1: break;
-		default: push_value(pop_value()); break;
-	}
+	ValueList z( pop_value());
+	push_value(z.toValue());
 }
 
-bool VirtualMachine::call_function_raw(Value fnval, std::size_t argCnt) {
+bool VirtualMachine::call_function_raw(Value fnval) {
 	if (!isFunction(fnval)) {
 		throw ArgumentIsNotFunction(fnval);
 	} else {
-		define_param_pack(argCnt);
 		const AbstractFunction &fnobj = getFunction(fnval);
 		auto task = fnobj.call(*this,fnval);
 		if (task != nullptr) {

@@ -25,14 +25,16 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::push_double,"PUSHF $F"},
 	{Cmd::push_const_1,"PUSHC @1"},
 	{Cmd::push_const_2,"PUSHC @2"},
-	{Cmd::def_param_pack_1,"PPACK $1"},
-	{Cmd::def_param_pack_2,"PPACK $2"},
-	{Cmd::expand_param_pack_1,"EXPAND $1"},
-	{Cmd::expand_param_pack_2,"EXPAND $2"},
-	{Cmd::collapse_param_pack,"COLLAPSE"},
+	{Cmd::def_param_pack_1,"MKLIST $1"},
+	{Cmd::def_param_pack_2,"MKLIST $2"},
+	{Cmd::expand_param_pack_1,"MKLISTEX $1"},
+	{Cmd::expand_param_pack_2,"MKLISTEX $2"},
+	{Cmd::collapse_param_pack,"COLPSLST"},
 	{Cmd::dup,"DUP"},
+	{Cmd::dup_1,"DUP $1"},
 	{Cmd::del,"DEL"},
 	{Cmd::swap,"SWAP"},
+	{Cmd::swap_1,"SWAP $1"},
 	{Cmd::get_var_1,"PUSH @1"},
 	{Cmd::get_var_2,"PUSH @2"},
 	{Cmd::deref,"DEREF"},
@@ -40,19 +42,19 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::deref_2,"DEREF @2"},
 	{Cmd::deref_fn_1,"DEREF_FN @1"},
 	{Cmd::deref_fn_2,"DEREF_FN @2"},
-	{Cmd::call_fn_1,"CALL ($1...)"},
-	{Cmd::call_fn_2,"CALL ($2...)"},
+	{Cmd::call,"CALL"},
 	{Cmd::exec_block,"EXEC"},
 	{Cmd::push_scope,"PUSH_SCOPE"},
 	{Cmd::pop_scope,"POP_SCOPE"},
 	{Cmd::push_scope_object,"OBJ2SCOPE"},
 	{Cmd::scope_to_object,"SCOPE2OBJ"},
 	{Cmd::raise,"RAISE"},
-	{Cmd::push_true,"PUSH true"},
-	{Cmd::push_false,"PUSH false"},
-	{Cmd::push_null,"PUSH null"},
-	{Cmd::push_undefined,"PUSH undefined"},
-	{Cmd::push_this,"PUSH this"},
+	{Cmd::push_true,"PUSHC true"},
+	{Cmd::push_false,"PUSHC false"},
+	{Cmd::push_null,"PUSHC null"},
+	{Cmd::push_undefined,"PUSHC undefined"},
+	{Cmd::push_this,"PUSHC this"},
+	{Cmd::push_zero_int,"PUSHC 0"},
 	{Cmd::push_array_1,"MKARRAY $1"},
 	{Cmd::push_array_2,"MKARRAY $2"},
 	{Cmd::push_array_4,"MKARRAY $4"},
@@ -100,6 +102,7 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::op_cmp_eq_1,"EQ @1"},
 	{Cmd::op_cmp_eq_2,"EQ @2"},
 	{Cmd::op_mkrange,"MKRANGE"},
+	{Cmd::op_checkbound,"CHKBOUND"},
 
 
 });
@@ -139,8 +142,10 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::expand_param_pack_2: expand_param_pack(vm,load_int2());break;
 			case Cmd::collapse_param_pack: vm.collapse_param_pack();break;
 			case Cmd::dup: vm.dup_value();break;
+			case Cmd::dup_1: vm.dup_value(load_int1());break;
 			case Cmd::del: vm.del_value();break;
 			case Cmd::swap: vm.swap_value();break;
+			case Cmd::swap_1: vm.swap_value(load_int1());break;
 			case Cmd::get_var_1: getVar(vm,load_int1());break;
 			case Cmd::get_var_2: getVar(vm,load_int2());break;
 			case Cmd::deref: deref(vm,vm.pop_value());break;
@@ -148,8 +153,7 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::deref_2: deref(vm,block.consts[load_int2()]);break;
 			case Cmd::deref_fn_1: deref_fn(vm,block.consts[load_int1()]);break;
 			case Cmd::deref_fn_2: deref_fn(vm,block.consts[load_int2()]);break;
-			case Cmd::call_fn_1: call_fn(vm,load_int1());break;
-			case Cmd::call_fn_2: call_fn(vm,load_int2());break;
+			case Cmd::call: call_fn(vm);break;
 			case Cmd::exec_block: exec_block(vm);break;
 			case Cmd::push_scope: vm.push_scope(Value());break;
 			case Cmd::pop_scope: vm.pop_scope();break;
@@ -187,6 +191,7 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::push_false: vm.push_value(false);break;
 			case Cmd::push_true: vm.push_value(true);break;
 			case Cmd::push_null: vm.push_value(nullptr);break;
+			case Cmd::push_zero_int: vm.push_value(0);break;
 			case Cmd::push_this: vm.push_value(vm.get_this());break;
 			case Cmd::push_undefined: vm.push_value(json::undefined);break;
 			case Cmd::op_unary_minus: unar_op(vm, op_unar_minus);break;
@@ -208,6 +213,8 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::op_mult_const_2: bin_op_const(vm, load_int2(), op_mult);break;
 			case Cmd::op_mult_const_4: bin_op_const(vm, load_int4(), op_mult);break;
 			case Cmd::op_mult_const_8: bin_op_const(vm, load_int8(), op_mult);break;
+			case Cmd::op_checkbound: bin_op(vm, op_checkbound);break;
+
 			default: invalid_instruction(vm,cmd);
 		}
 		return true;
@@ -305,8 +312,10 @@ Value BlockExecution::op_mkrange(const Value &a, const Value &b) {
 	return newRange(begin, end);
 }
 
-
-
+Value BlockExecution::op_checkbound(const Value &a, const Value &b) {
+	auto idx = b.getInt();
+	return (idx >= 0 && idx < static_cast<std::intptr_t>(a.size()));
+}
 
 Value BlockExecution::do_deref(const Value where, const Value &what) {
 	switch (what.type()) {
@@ -337,9 +346,9 @@ void BlockExecution::deref_fn(VirtualMachine &vm, Value idx) {
 	}
 }
 
-void BlockExecution::call_fn(VirtualMachine &vm, std::intptr_t param_pack_size) {
+void BlockExecution::call_fn(VirtualMachine &vm) {
 	Value fn = vm.pop_value();
-	vm.call_function_raw(fn, param_pack_size);
+	vm.call_function_raw(fn);
 }
 
 

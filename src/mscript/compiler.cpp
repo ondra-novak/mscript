@@ -78,7 +78,7 @@ PNode Compiler::handleValueSuffixes(PNode expr) {
 	case Symbol::s_left_square_bracket:
 		commit();
 		tmp = parseValue();
-		sync(Symbol::s_right_bracket);
+		sync(Symbol::s_right_square_bracket);
 		return handleValueSuffixes(std::make_unique<DerefernceNode>(std::move(expr), std::move(tmp)));
 	case Symbol::s_dot:
 		commit();

@@ -16,6 +16,80 @@
 namespace mscript {
 
 template<typename Fn>
+void Block::disassemble_ip(std::size_t ip, Fn &&fn) const {
+	if (ip >= code.size()) fn(DisEvent::code, ip, "(end of code)");
+	else {
+		auto iter = code.begin()+ip;
+		disassemble_iter(iter, code.end(), std::forward<Fn>(fn));
+	}
+}
+
+template<typename Fn>
+void Block::disassemble_iter(std::vector<std::uint8_t>::const_iterator &iter, const std::vector<std::uint8_t>::const_iterator &end, Fn &&fn) const {
+
+
+
+	auto loadFloat = [&]() {
+		char buff[8];
+		for (int i = 0; i < 8; i++) {
+			if (iter == end) break;
+			buff[i] = *iter;
+			iter++;
+		}
+		return *reinterpret_cast<const double *>(buff+0);
+	};
+
+	auto loadNum = [&](char flag) -> std::int64_t {
+		if (iter == end) return 0;
+		int count = flag - '0';
+		std::int64_t res = static_cast<signed char>(*iter);
+		--count;
+		++iter;
+		while (count) {
+			res = res << 8;
+			res |= *iter;
+			++iter;
+			--count;
+		}
+		return res;
+
+	};
+
+	auto pos =std::distance(code.begin(), iter);
+	Cmd v = static_cast<Cmd>(*iter);
+	++iter;
+	std::string txt ( strCmd[v]);
+	auto p = txt.find('$');
+	if (p != txt.npos) {
+		if (txt[p+1] == 'F') {
+			auto f = loadFloat();
+			txt = txt.substr(0,p)+std::to_string(f);
+		} else {
+			auto num = loadNum(txt[p+1]);
+			txt = txt.substr(0,p)+std::to_string(num)+txt.substr(p+2);
+		}
+	} else {
+		p = txt.find('@');
+		if (p != txt.npos) {
+			auto num = loadNum(txt[p+1]);
+			auto cnst = consts[num];
+			txt = txt.substr(0,p)+cnst.stringify()+txt.substr(p+2);
+			if (txt.size()>50) txt = txt.substr(0,50)+"...";
+		} else {
+			p = txt.find('^');
+			if (p != txt.npos) {
+				auto num = loadNum(txt[p+1]);
+				num += std::distance(code.begin(), iter);
+				txt = txt.substr(0,p)+std::to_string(num)+txt.substr(p+2);
+			}
+
+		}
+	}
+	fn(DisEvent::code, pos, txt);
+
+}
+
+template<typename Fn>
 void Block::disassemble(Fn &&fn) const {
 
 
@@ -24,66 +98,11 @@ void Block::disassemble(Fn &&fn) const {
 		auto iter = code.begin();
 		auto end = code.end();
 
-		auto loadFloat = [&]() {
-			char buff[8];
-			for (int i = 0; i < 8; i++) {
-				if (iter == end) break;
-				buff[i] = *iter;
-				iter++;
-			}
-			return *reinterpret_cast<const double *>(buff+0);
-		};
-
-		auto loadNum = [&](char flag) -> std::int64_t {
-			if (iter == end) return 0;
-			int count = flag - '0';
-			std::int64_t res = static_cast<signed char>(*iter);
-			--count;
-			++iter;
-			while (count) {
-				res = res << 8;
-				res |= *iter;
-				++iter;
-				--count;
-			}
-			return res;
-
-		};
 
 
 
 		while (iter != end) {
-			auto pos =std::distance(code.begin(), iter);
-			Cmd v = static_cast<Cmd>(*iter);
-			++iter;
-			std::string txt ( strCmd[v]);
-			auto p = txt.find('$');
-			if (p != txt.npos) {
-				if (txt[p+1] == 'F') {
-					auto f = loadFloat();
-					txt = txt.substr(0,p)+std::to_string(f);
-				} else {
-					auto num = loadNum(txt[p+1]);
-					txt = txt.substr(0,p)+std::to_string(num)+txt.substr(p+2);
-				}
-			} else {
-				p = txt.find('@');
-				if (p != txt.npos) {
-					auto num = loadNum(txt[p+1]);
-					auto cnst = consts[num];
-					txt = txt.substr(0,p)+cnst.stringify()+txt.substr(p+2);
-					if (txt.size()>50) txt = txt.substr(0,50)+"...";
-				} else {
-					p = txt.find('^');
-					if (p != txt.npos) {
-						auto num = loadNum(txt[p+1]);
-						num += std::distance(code.begin(), iter);
-						txt = txt.substr(0,p)+std::to_string(num)+txt.substr(p+2);
-					}
-
-				}
-			}
-			fn(DisEvent::code, pos, txt);
+			disassemble_iter(iter, end, std::forward<Fn>(fn));
 		}
 
 		int idx = 0;

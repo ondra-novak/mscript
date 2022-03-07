@@ -34,7 +34,9 @@ enum class Cmd:std::uint8_t{
 	collapse_param_pack, ///<if param pack defined, it is collapsed to array or single value
 	dup,			   ///<duplicate item on stack
 	del,				///<del item on stack
+	dup_1,			   ///<duplicate nth-item on stack
 	swap,				///<swap top most items
+	swap_1,				///<swap top most items with nth-item on stack
 	get_var_1,			///<push value from variable, name of variable is in consts 1 byte index
 	get_var_2,			///<push value from variable, name of variable is in consts 2 byte index
 	deref,				///<pick value and index, derefence object or array
@@ -42,8 +44,7 @@ enum class Cmd:std::uint8_t{
 	deref_2,			///<dereference value, pick index from consts 2 byte
 	deref_fn_1,			///<dereference of function of the value
 	deref_fn_2,			///<dereference of function of the value
-	call_fn_1,			///<call function, requires <params>, <function>- argument contains count of parameters
-	call_fn_2,			///<call function, requires <params>, <function>- argument contains count of parameters
+	call,				///<call function, requires <arguments as list><function>
 	exec_block,			///<execute block, requires <block> -> returns result
 	push_scope,			///<create empty scope
 	pop_scope,			///<destroy toplevel scope
@@ -56,11 +57,12 @@ enum class Cmd:std::uint8_t{
 	push_null,			///<push null
 	push_undefined,		///<push undefined
 	push_this,			///<push this value
+	push_zero_int,		///<push integer zero
 	push_array_1,		///<push array (argument count items)
 	push_array_2,		///<push array (argument count items)
 	push_array_4,		///<push array (argument count items)
 
-	/// set variables from param pack
+	// set variables from param pack
 	set_var_1,		    ///<pick name of variable from consts (1 byte), set variable
 	set_var_2,		    ///<pick name of variable from consts (2 byte), set variable
 	pop_var_1,		    ///<pick name of variable from consts (1 byte), set variable
@@ -69,7 +71,7 @@ enum class Cmd:std::uint8_t{
 	is_def_1,			///<pick name of varuable, put on stack result (true if defined)
 	is_def_2,			///<pick name of varuable, put on stack result (true if defined)
 
-	/// operations
+	// operations
 
 	op_add,
 	op_sub,
@@ -90,6 +92,7 @@ enum class Cmd:std::uint8_t{
 	op_mkrange,
 	op_cmp_eq_1,		//<compare with constant - replace value with true if equal, push false, if not
 	op_cmp_eq_2,		//<compare with constant - replace value with true if equal, push false, if not
+	op_checkbound,		//Binary op, requires <container><index>, replaces with true, when index is above or below range
 
 	op_add_const_1,
 	op_add_const_2,
@@ -104,7 +107,7 @@ enum class Cmd:std::uint8_t{
 	op_mult_const_4,
 	op_mult_const_8,
 
-	/// jumps
+	// jumps
 
 	jump_1,			///<relative jump 1 byte
 	jump_2,			///<relative jump 2 bytes
@@ -113,6 +116,9 @@ enum class Cmd:std::uint8_t{
 	jump_false_1,	///consumes bool and jumps if false
 	jump_false_2,	///consumes bool and jumps if false
 	exit_block,		///exit current block
+
+	// loops
+
 
 };
 
@@ -139,6 +145,8 @@ public:
 	};
 
 	template<typename Fn> void disassemble(Fn &&fn) const;
+	template<typename Fn> void disassemble_ip(std::size_t ip, Fn &&fn) const;
+	template<typename Fn> void disassemble_iter(std::vector<std::uint8_t>::const_iterator &iter, const std::vector<std::uint8_t>::const_iterator &end, Fn &&fn) const;
 };
 
 static inline Value packToValue(Block &&block) {
@@ -164,10 +172,13 @@ public:
 	virtual bool exception(VirtualMachine &vm, std::exception_ptr e);
 	virtual std::optional<CodeLocation> getCodeLocation() const;
 
+	const Block &getBlock() const {return block;}
+	std::size_t getIP() const {return ip;}
+
 protected:
 	Value block_value;
 	const Block &block;
-	std::size_t ir = 0;
+	///Instruction pointer
 	std::size_t ip = 0;
 
 
@@ -180,7 +191,7 @@ protected:
 	void getVar(VirtualMachine &vm, std::intptr_t idx);
 	void deref(VirtualMachine &vm, Value idx);
 	void deref_fn(VirtualMachine &vm, Value idx);
-	void call_fn(VirtualMachine &vm, std::intptr_t param_pack_size);
+	void call_fn(VirtualMachine &vm);
 	void call_method(VirtualMachine &vm, std::intptr_t param_pack_size);
 	void exec_block(VirtualMachine &vm);
 	void do_raise(VirtualMachine &vm);
@@ -215,6 +226,8 @@ protected:
 	static Value op_mkrange(const Value &a, const Value &b);
 	static Value op_not(const Value &a);
 	static Value op_unar_minus(const Value &a);
+	static Value op_checkbound(const Value &a, const Value &b);
+
 
 
 	static Value do_deref(const Value where, const Value &what);

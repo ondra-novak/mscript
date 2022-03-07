@@ -68,7 +68,7 @@ static inline Value defineFunction(Fn &&fn) {
 	return packToValue(std::unique_ptr<AbstractFunction>(std::move(ptr)), name);
 }
 
-template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<ParamPack>()))>
+template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<ValueList>()))>
 static inline Value defineSimpleFn(Fn &&fn) {
 	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value closure){
 		auto params = vm.top_params();

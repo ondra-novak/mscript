@@ -11,9 +11,9 @@
 #include <chrono>
 #include <imtjson/object.h>
 #include <imtjson/value.h>
+#include <mscript/param_pack.h>
 #include <shared/refcnt.h>
 
-#include "param_pack.h"
 #include "value.h"
 #include "codelocation.h"
 
@@ -81,13 +81,14 @@ public:
 	const Value &get_parent_link() const {return parentLink;}
 
 
-	Value convertToObject();
+	Value convertToObject() const;
 	Value operator[](const std::string_view &name) const;
 	bool set(const std::string_view &name, const Value &v);
 
 	auto begin() const {return items.begin();}
 	auto end() const {return items.end();}
 	Value getBase() const {return base;}
+	auto find(const std::string &name) const {return items.find(name);}
 
 protected:
 	Value base;
@@ -107,6 +108,7 @@ public:
 		unsigned int maxTaskStack = 1000;
 		///max scope stack (max scope recursion)
 		unsigned int maxScopeStack = 1000;
+
 	};
 
 	VirtualMachine(const Config &cfg);
@@ -177,11 +179,13 @@ public:
 	void del_value();
 	void dup_value();
 	void swap_value();
+	void dup_value(std::size_t ofs);
+	void swap_value(std::size_t ofs);
 	Value pop_value();
 	Value top_value() const;
 	///retrieve value from stack, index is counted from top
 	Value get_value(std::size_t idx) const;
-	ParamPack top_params() const;
+	ValueList top_params() const;
 	///Defines param pack
 	/** Param pack can exist only on top of stack
 	 * Param pack can be empty.
@@ -196,7 +200,6 @@ public:
 	 */
 	void define_param_pack(std::size_t arguments);
 	void collapse_param_pack();
-
 
 	bool set_var(const std::string_view &name, const Value &value);
 	bool get_var(const std::string_view &name, Value &value);
@@ -248,7 +251,7 @@ public:
 	 * @retval false function executed synchronously - result is immediately available
 	 * @retval true function executed asynchronously - result will be available on next cycle
 	 */
-	bool call_function_raw(Value fnval, std::size_t argCnt);
+	bool call_function_raw(Value fnval);
 
 
 	bool isComileTime() const {
@@ -274,6 +277,20 @@ public:
 	void setMaxExecutionTime(const std::chrono::duration<T,U> &dur) {
 		setTimeStop(std::chrono::system_clock::now()+dur);
 	}
+
+	const CalcStack& getCalcStack() const {
+		return calcStack;
+	}
+
+	const ScopeStack& getScopeStack() const {
+		return scopeStack;
+	}
+
+	const TaskStack& getTaskStack() const {
+		return taskStack;
+	}
+
+
 protected:
 
 	Config cfg;
@@ -281,7 +298,6 @@ protected:
 	CalcStack calcStack;
 	ScopeStack scopeStack;
 	Value globalScope;
-	std::size_t paramPack = 0;
 	std::exception_ptr exp = nullptr;
 	std::vector<CodeLocation> exp_location;
 	std::optional<std::chrono::system_clock::time_point> timeStop;
@@ -302,7 +318,8 @@ protected:
 template<typename ... Args>
 inline bool VirtualMachine::call_function(Value fnval, const Args &... args) {
 	push_arguments(args...);
-	return call_function_raw(fnval,sizeof...(Args));
+	define_param_pack(sizeof...(Args));
+	return call_function_raw(fnval);
 }
 
 

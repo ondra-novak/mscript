@@ -136,53 +136,53 @@ static Value rt = json::Object {
 		{"PI",std::acos(0.0)*2},
 		{"SQRT1_2",std::sqrt(0.5)},
 		{"SQRT2",std::sqrt(2)},
-		{"abs",defineSimpleFn([](ParamPack params){return std::abs(params[0].getNumber());})},
-		{"acos",defineSimpleFn([](ParamPack params){return std::acos(params[0].getNumber());})},
-		{"acosh",defineSimpleFn([](ParamPack params){return std::acosh(params[0].getNumber());})},
-		{"asin",defineSimpleFn([](ParamPack params){return std::asin(params[0].getNumber());})},
-		{"asinh",defineSimpleFn([](ParamPack params){return std::asinh(params[0].getNumber());})},
-		{"atan",defineSimpleFn([](ParamPack params){return std::atan(params[0].getNumber());})},
-		{"atanh",defineSimpleFn([](ParamPack params){return std::atanh(params[0].getNumber());})},
-		{"atan2",defineSimpleFn([](ParamPack params){return std::atan2(params[0].getNumber(),params[1].getNumber());})},
-		{"cbrt",defineSimpleFn([](ParamPack params){return std::cbrt(params[0].getNumber());})},
-		{"ceil",defineSimpleFn([](ParamPack params){return std::ceil(params[0].getNumber());})},
-		{"cos",defineSimpleFn([](ParamPack params){return std::cos(params[0].getNumber());})},
-		{"cosh",defineSimpleFn([](ParamPack params){return std::cosh(params[0].getNumber());})},
-		{"exp",defineSimpleFn([](ParamPack params){return std::exp(params[0].getNumber());})},
-		{"expm1",defineSimpleFn([](ParamPack params){return std::expm1(params[0].getNumber());})},
-		{"floor",defineSimpleFn([](ParamPack params){return std::floor(params[0].getNumber());})},
-		{"fround",defineSimpleFn([](ParamPack params){return std::round(params[0].getNumber());})},
-		{"hypot",defineSimpleFn([](ParamPack params){
+		{"abs",defineSimpleFn([](ValueList params){return std::abs(params[0].getNumber());})},
+		{"acos",defineSimpleFn([](ValueList params){return std::acos(params[0].getNumber());})},
+		{"acosh",defineSimpleFn([](ValueList params){return std::acosh(params[0].getNumber());})},
+		{"asin",defineSimpleFn([](ValueList params){return std::asin(params[0].getNumber());})},
+		{"asinh",defineSimpleFn([](ValueList params){return std::asinh(params[0].getNumber());})},
+		{"atan",defineSimpleFn([](ValueList params){return std::atan(params[0].getNumber());})},
+		{"atanh",defineSimpleFn([](ValueList params){return std::atanh(params[0].getNumber());})},
+		{"atan2",defineSimpleFn([](ValueList params){return std::atan2(params[0].getNumber(),params[1].getNumber());})},
+		{"cbrt",defineSimpleFn([](ValueList params){return std::cbrt(params[0].getNumber());})},
+		{"ceil",defineSimpleFn([](ValueList params){return std::ceil(params[0].getNumber());})},
+		{"cos",defineSimpleFn([](ValueList params){return std::cos(params[0].getNumber());})},
+		{"cosh",defineSimpleFn([](ValueList params){return std::cosh(params[0].getNumber());})},
+		{"exp",defineSimpleFn([](ValueList params){return std::exp(params[0].getNumber());})},
+		{"expm1",defineSimpleFn([](ValueList params){return std::expm1(params[0].getNumber());})},
+		{"floor",defineSimpleFn([](ValueList params){return std::floor(params[0].getNumber());})},
+		{"fround",defineSimpleFn([](ValueList params){return std::round(params[0].getNumber());})},
+		{"hypot",defineSimpleFn([](ValueList params){
 			double v = 0;
 			for (Value a: params) {auto x = a.getNumber(); v+=x*x;}
 			return std::sqrt(v);
 		})},
-		{"log",defineSimpleFn([](ParamPack params){return std::log(params[0].getNumber());})},
-		{"log1p",defineSimpleFn([](ParamPack params){return std::log1p(params[0].getNumber());})},
-		{"log10",defineSimpleFn([](ParamPack params){return std::log10(params[0].getNumber());})},
-		{"log2",defineSimpleFn([](ParamPack params){return std::log2(params[0].getNumber());})},
-		{"max",defineSimpleFn([](ParamPack params){
+		{"log",defineSimpleFn([](ValueList params){return std::log(params[0].getNumber());})},
+		{"log1p",defineSimpleFn([](ValueList params){return std::log1p(params[0].getNumber());})},
+		{"log10",defineSimpleFn([](ValueList params){return std::log10(params[0].getNumber());})},
+		{"log2",defineSimpleFn([](ValueList params){return std::log2(params[0].getNumber());})},
+		{"max",defineSimpleFn([](ValueList params){
 			double v = params[0].getNumber();
 			for (Value a: params) {auto x = a.getNumber(); v = x>v?x:v;}
 			return v;})},
-		{"min",defineSimpleFn([](ParamPack params){
+		{"min",defineSimpleFn([](ValueList params){
 			double v = params[0].getNumber();
 			for (Value a: params) {auto x = a.getNumber(); v = x<v?x:v;}
 			return v;})},
-		{"pow",defineSimpleFn([](ParamPack params){return std::pow(params[0].getNumber(),params[1].getNumber());})},
-		{"random",defineSimpleFn([](ParamPack params){
+		{"pow",defineSimpleFn([](ValueList params){return std::pow(params[0].getNumber(),params[1].getNumber());})},
+		{"random",defineSimpleFn([](ValueList params){
 				std::random_device rnd;
 				std::uniform_real_distribution<double> urd(0,1);
 				return urd(rnd);})},
-		{"round",defineSimpleFn([](ParamPack params){return std::round(params[0].getNumber());})},
-		{"sign",defineSimpleFn([](ParamPack params){
+		{"round",defineSimpleFn([](ValueList params){return std::round(params[0].getNumber());})},
+		{"sign",defineSimpleFn([](ValueList params){
 			double n = params[0].getNumber();
 			return n>0?1:n<0?-1:0;})},
-		{"sin",defineSimpleFn([](ParamPack params){return std::sin(params[0].getNumber());})},
-		{"sinh",defineSimpleFn([](ParamPack params){return std::sinh(params[0].getNumber());})},
-		{"sqrt",defineSimpleFn([](ParamPack params){return std::sqrt(params[0].getNumber());})},
-		{"tan",defineSimpleFn([](ParamPack params){return std::tan(params[0].getNumber());})},
-		{"trunc",defineSimpleFn([](ParamPack params){return std::trunc(params[0].getNumber());})},
+		{"sin",defineSimpleFn([](ValueList params){return std::sin(params[0].getNumber());})},
+		{"sinh",defineSimpleFn([](ValueList params){return std::sinh(params[0].getNumber());})},
+		{"sqrt",defineSimpleFn([](ValueList params){return std::sqrt(params[0].getNumber());})},
+		{"tan",defineSimpleFn([](ValueList params){return std::tan(params[0].getNumber());})},
+		{"trunc",defineSimpleFn([](ValueList params){return std::trunc(params[0].getNumber());})},
 	}},
 	{"map",defineFunction([](VirtualMachine &vm, Value){
 		return std::make_unique<MapTask>();

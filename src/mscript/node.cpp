@@ -151,9 +151,9 @@ void FunctionCall::generateListVars(VarSet &vars) const {
 }
 
 void FunctionCall::generateExpression(BlockBld &blk) const {
-	paramPack->generateUnclosedExpression(blk);
+	paramPack->generateExpression(blk);
 	fn->generateExpression(blk);
-	blk.pushInt(paramPack->count(), Cmd::call_fn_1,2);
+	blk.pushCmd(Cmd::call);
 }
 
 ValueNode::ValueNode(Value n):n(n) {}
@@ -293,12 +293,12 @@ MethodCallNode::MethodCallNode(PNode &&left, Value identifier, PParamPackNode &&
 
 
 void MethodCallNode::generateExpression(BlockBld &blk) const {
-	pp->generateUnclosedExpression(blk);					//<params>
+	pp->generateExpression(blk);					//<params>
 	left->generateExpression(blk);					//<params> <object>
 	blk.pushCmd(Cmd::dup);							//<params> <object> <object>
 	blk.pushCmd(Cmd::push_scope_object);			//<params> <object> <object>   -> scope
 	blk.pushInt(blk.pushConst(identifier), Cmd::deref_fn_1,2);	//<params> <function>    -> <object>.<identifier>
-	blk.pushInt(pp->count(), Cmd::call_fn_1,2);		//<result>
+	blk.pushCmd(Cmd::call);		//<result>
 	blk.pushCmd(Cmd::pop_scope);					//<result>
 }
 
@@ -427,81 +427,57 @@ void BooleanAndOrNode::generateExpression(BlockBld &blk) const {
 }
 
 ForLoopNode::ForLoopNode(Value iterator, PNode &&container, std::vector<std::pair<Value,PNode> > &&init, PNode &&block)
-:iterator(iterator)
+:ExecNode(std::move(block))
+,iterator(iterator)
 ,container(std::move(container))
-,block(std::move(block))
 ,init(std::move(init))
 {
 
 }
 
-class ForLoopFnTask: public AbstractTask {
-public:
-	virtual bool init(mscript::VirtualMachine &vm) {
-		//parameters are: <block> <container> <iterator> <init>....
-		auto params = vm.top_params();
-		container = params[1]; //container - param[1]
-		if (container.type() == json::number) { //container can be number - in this case, it is count of cycles
-			max_cnt = (std::size_t)std::round(container.getNumber());
-			no_container = true;		//we have no container
-		} else {
-			max_cnt = container.size();		//count are equal to size of container
-			no_container = false;			//we have container
-		}
-		if (max_cnt == 0) return false;		//if no counting - skip everything
-
-		block = params[0];					//pick block
-
-		json::Object hlp;					//0,1,2 3+ init
-		for (std::size_t i = 3; i < params.size(); i+=2) {
-			hlp.set(params[i+1].getString(), params[i]);	//build object for scope
-		}
-		prevScope = hlp;					//create scope object
-		iterator = params[2];				//pick iterator
-		pos = 0;							//initialize position
-		vm.del_value();						//discard parameters
-		return true;						//function can continue
-
-	}
-	virtual bool run(mscript::VirtualMachine &vm) {
-		if (pos) {									//if (pos != 0) - not first cycle
-			if (pos >= max_cnt) {
-				vm.pop_scope();
-				return false;
-			}
-			vm.del_value();
-			prevScope = vm.scope_to_object();
-			vm.pop_scope();
-		}
-		vm.push_scope(prevScope);
-		vm.set_var(iterator.getString(), no_container?Value(pos):container[pos]);
-		vm.push_task(std::make_unique<BlockExecution>(block));
-		++pos;
-		return true;
-	}
-	Value prevScope;
-	Value container;
-	Value block;
-	Value iterator;
-	std::size_t pos;
-	std::size_t max_cnt;
-	bool no_container;
-};
 
 void ForLoopNode::generateExpression(BlockBld &blk) const {
-	block->generateExpression(blk);
-	container->generateExpression(blk);
-	blk.pushInt(blk.pushConst(iterator), Cmd::push_const_1,2);
-	for (const auto &x: init) {
-		x.second->generateExpression(blk);
-		blk.pushInt(blk.pushConst(x.first), Cmd::push_const_1,2);
+	blk.pushCmd(Cmd::push_null); //<ret>
+	if (init.empty()) {
+		blk.pushCmd(Cmd::push_null);
+	} else {
+		blk.pushCmd(Cmd::push_scope);
+		for (const auto &x: init) {
+			x.second->generateExpression(blk);
+			blk.pushInt(blk.pushConst(x.first), Cmd::pop_var_1, 2);
+		}
+		blk.pushCmd(Cmd::scope_to_object);
+		blk.pushCmd(Cmd::pop_scope);
 	}
-	static Value forLoopFn = defineFunction([](VirtualMachine &vm, Value closure){
-		return std::make_unique<ForLoopFnTask>();
-	});
-	blk.pushInt(blk.pushConst(forLoopFn), Cmd::push_const_1,2);
-	blk.pushInt(init.size()*2+3, Cmd::call_fn_1,2);
-
+	// <ret><scope>
+	container->generateExpression(blk);
+	// <ret><scope><container>
+	blk.pushCmd(Cmd::push_zero_int);
+	// <ret><scope><container><idx>
+	auto label = blk.code.size();
+	blk.pushInt(1, Cmd::dup_1, 1);  //<ret><scope><container><idx><container>
+	blk.pushInt(1, Cmd::dup_1, 1);	//<ret><scope><container><idx><container><idx>
+	blk.pushCmd(Cmd::op_checkbound); //<ret><scope><container><idx><bool>
+	auto jpout = blk.prepareJump(Cmd::jump_false_1, 2); //<ret><scope><container><idx>
+	blk.pushInt(2, Cmd::dup_1, 1);	//<ret><scope><container><idx><scope>
+	blk.pushCmd(Cmd::push_scope_object); //<ret><scope><container><idx>
+	blk.pushInt(1, Cmd::dup_1, 1);  //<ret><scope><container><idx><container>
+	blk.pushInt(1, Cmd::dup_1, 1);	//<ret><scope><container><idx><container><idx>
+	blk.pushCmd(Cmd::deref);		//<ret><scope><container><idx><value>
+	blk.pushInt(blk.pushConst(iterator), Cmd::pop_var_1, 2); //<ret><scope><container><idx>
+	ExecNode::generateExpression(blk);	//generate block execution <ret><scope><container><idx><ret>
+	blk.pushInt(4, Cmd::swap_1, 1);		//swap old ret with new ret
+	blk.pushCmd(Cmd::del);				//<ret><scope><container><idx>
+	blk.pushCmd(Cmd::scope_to_object);	//generate block execution <ret><scope><container><idx><scope>
+	blk.pushCmd(Cmd::pop_scope);
+	blk.pushInt(3, Cmd::swap_1, 1);	//swap old scope with new scope
+	blk.pushCmd(Cmd::del);			//<ret><scope><container><idx>
+	blk.pushInt(1,Cmd::op_add_const_1,8); //<ret><scope><container><idx+1>
+	blk.finishJumpTo(blk.prepareJump(Cmd::jump_1, 2), label,2);
+	blk.finishJumpHere(jpout, 2);	//<ret><scope><container><idx>
+	blk.pushCmd(Cmd::del);			//<ret><scope><container>
+	blk.pushCmd(Cmd::del);			//<ret><scope>
+	blk.pushCmd(Cmd::del);			//<ret>
 
 }
 
@@ -518,8 +494,8 @@ void WhileLoopNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(Cmd::del);					//
 	ExecNode::generateExpression(blk);		//<retval>
 	blk.pushCmd(Cmd::scope_to_object);		//<retval> <scope>
-	blk.pushCmd(Cmd::pop_scope);
 	condition->generateExpression(blk);		//<retval> <scope> <condition>
+	blk.pushCmd(Cmd::pop_scope);
 	blk.finishJumpTo(blk.prepareJump(Cmd::jump_true_1, 2), rephere, 2); //<retval><scope>
 	blk.pushCmd(Cmd::del);					//<retval>
 	blk.finishJumpHere(skp, 2);
@@ -607,12 +583,7 @@ void BooleanAndOrNode::generateListVars(VarSet &vars) const {
 
 void ForLoopNode::generateListVars(VarSet &vars) const {
 	container->generateListVars(vars);
-	const BlockValueNode *bvn = dynamic_cast<const BlockValueNode *>(block.get());
-
-	if (bvn) bvn->generateListVars(vars);
-	else vars.insert(nullptr);
-
-
+	ExecNode::generateListVars(vars);
 	for (const auto &x: init) x.second->generateListVars(vars);
 }
 

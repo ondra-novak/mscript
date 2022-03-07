@@ -1,0 +1,3 @@
+A=["Ahoj","Nazdar","Cau"]
+B=[10,20,30]
+printnl("Expanded arguments:",A...)
