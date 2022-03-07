@@ -33,7 +33,7 @@ public:
 	 *  @param closure closure context (optional)
 	 *
 	 */
-	virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value closure) const = 0;
+	virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value object, Value closure) const = 0;
 
 };
 
@@ -51,12 +51,12 @@ static inline const AbstractFunction &getFunction(const Value &v) {
 	return *r;
 }
 
-template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<VirtualMachine &>(), std::declval<Value>()))>
+template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<VirtualMachine &>(), std::declval<Value>(), std::declval<Value>()))>
 static inline Value defineFunction(Fn &&fn) {
 	class FnClass: public AbstractFunction {
 	public:
-		virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value closure) const override {
-			return fn(vm, closure);
+		virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value object, Value closure) const override {
+			return fn(vm, object, closure);
 		}
 		FnClass(Fn &&fn):fn(std::forward<Fn>(fn)) {}
 	protected:
@@ -70,7 +70,7 @@ static inline Value defineFunction(Fn &&fn) {
 
 template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<ValueList>()))>
 static inline Value defineSimpleFn(Fn &&fn) {
-	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value closure){
+	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value, Value){
 		auto params = vm.top_params();
 		Value ret = fn(params);
 		vm.del_value();

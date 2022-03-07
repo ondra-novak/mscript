@@ -152,8 +152,13 @@ void FunctionCall::generateListVars(VarSet &vars) const {
 
 void FunctionCall::generateExpression(BlockBld &blk) const {
 	paramPack->generateExpression(blk);
-	fn->generateExpression(blk);
-	blk.pushCmd(Cmd::call);
+	auto ident = dynamic_cast<const Identifier *>(fn.get());
+	if (ident) {
+		blk.pushInt(blk.pushConst(ident->getName()), Cmd::call_1, 2);
+	} else {
+		fn->generateExpression(blk);
+		blk.pushCmd(Cmd::call);
+	}
 }
 
 ValueNode::ValueNode(Value n):n(n) {}
@@ -201,13 +206,13 @@ std::size_t EmptyParamPackNode::count() const {
 }
 
 void AbstractParamPackNode::generateExpression(BlockBld &blk) const {
-	generateUnclosedExpression(blk);
-	if (infinite) {
-		blk.pushInt(count(), Cmd::expand_param_pack_1,2);
-	} else if (count() != 1) {
-		blk.pushInt(count(), Cmd::def_param_pack_1,2);
+	if (count()==1) {
+		generateUnclosedExpression(blk);
+	} else {
+		blk.pushCmd(Cmd::begin_list);
+		generateUnclosedExpression(blk);
+		blk.pushCmd(Cmd::close_list);
 	}
-
 }
 
 DirectCmdNode::DirectCmdNode(Cmd cmd):cmd(cmd) {
@@ -295,19 +300,15 @@ MethodCallNode::MethodCallNode(PNode &&left, Value identifier, PParamPackNode &&
 void MethodCallNode::generateExpression(BlockBld &blk) const {
 	pp->generateExpression(blk);					//<params>
 	left->generateExpression(blk);					//<params> <object>
-	blk.pushCmd(Cmd::dup);							//<params> <object> <object>
-	blk.pushCmd(Cmd::push_scope_object);			//<params> <object> <object>   -> scope
-	blk.pushInt(blk.pushConst(identifier), Cmd::deref_fn_1,2);	//<params> <function>    -> <object>.<identifier>
-	blk.pushCmd(Cmd::call);		//<result>
-	blk.pushCmd(Cmd::pop_scope);					//<result>
+	blk.pushInt(blk.pushConst(identifier), Cmd::mcall_1,2);
 }
 
 //Task handles executing a function - pushes argument to scope
 class FunctionTask: public BlockExecution {
 public:
 	///Requires identifiers and block
-	FunctionTask(const std::vector<std::string> &identifiers, Value block)
-		:BlockExecution(block) ,identifiers(identifiers) {}
+	FunctionTask(const std::vector<std::string> &identifiers, Value block, Value object, Value closure)
+		:BlockExecution(block) ,identifiers(identifiers),object(object),closure(closure) {}
 
 	///Called during init
 	/**
@@ -316,7 +317,8 @@ public:
 	 * Function must create scope, then pushes arguments to the scope, drops arguments and starts the function
 	 */
 	virtual bool init(VirtualMachine &vm) {
-		vm.push_scope(Value());
+		if (object.defined()) vm.push_scope(object);
+		vm.push_scope(closure);
 		scope = true;
 		auto args = vm.top_params();
 		std::size_t idx = 0;
@@ -337,6 +339,9 @@ public:
 		if (!run(vm)) {
 			if (scope) {
 				vm.pop_scope();
+				if (object.defined()) {
+					vm.pop_scope();
+				}
 				scope = false;
 			}
 			return false;
@@ -349,11 +354,13 @@ protected:
 	bool scope = false;
 	///identifiers are used only during init - so it can be const
 	const std::vector<std::string> &identifiers;
+	Value object;
+	Value closure;
 };
 
 
-std::unique_ptr<AbstractTask> UserFn::call(VirtualMachine &vm, Value closure) const  {
-	return std::make_unique<FunctionTask>(identifiers, code);
+std::unique_ptr<AbstractTask> UserFn::call(VirtualMachine &vm, Value object, Value closure) const  {
+	return std::make_unique<FunctionTask>(identifiers, code, object, closure);
 }
 
 

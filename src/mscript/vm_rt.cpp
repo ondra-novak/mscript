@@ -184,15 +184,6 @@ static Value rt = json::Object {
 		{"tan",defineSimpleFn([](ValueList params){return std::tan(params[0].getNumber());})},
 		{"trunc",defineSimpleFn([](ValueList params){return std::trunc(params[0].getNumber());})},
 	}},
-	{"map",defineFunction([](VirtualMachine &vm, Value){
-		return std::make_unique<MapTask>();
-	})},
-	{"reduce",defineFunction([](VirtualMachine &vm, Value){
-		return std::make_unique<ReduceTask>();
-	})},
-	{"filter",defineFunction([](VirtualMachine &vm, Value){
-		return std::make_unique<ReduceTask>();
-	})},
 
 };
 return rt;

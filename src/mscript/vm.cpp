@@ -264,12 +264,12 @@ void VirtualMachine::collapse_param_pack() {
 	push_value(z.toValue());
 }
 
-bool VirtualMachine::call_function_raw(Value fnval) {
+bool VirtualMachine::call_function_raw(Value fnval, Value object) {
 	if (!isFunction(fnval)) {
 		throw ArgumentIsNotFunction(fnval);
 	} else {
 		const AbstractFunction &fnobj = getFunction(fnval);
-		auto task = fnobj.call(*this,fnval);
+		auto task = fnobj.call(*this,object,fnval);
 		if (task != nullptr) {
 			push_task(std::move(task));
 			return true;
@@ -278,6 +278,7 @@ bool VirtualMachine::call_function_raw(Value fnval) {
 		}
 	}
 }
+
 
 std::exception_ptr VirtualMachine::get_exception() const {
 	return exp;
@@ -312,6 +313,42 @@ VirtualMachine::VirtualMachine(const Config &cfg):cfg(cfg) {
 VirtualMachine::VirtualMachine() {
 }
 
+void VirtualMachine::push_values(const Value &arra) {
+	if (arra.isContainer()) for (Value x: arra) push_value(x);
+	else push_value(arra);
+}
+
+
+
+void VirtualMachine::begin_list() {
+	static Value emptylist (json::PValue::staticCast(ValueListValue::create(0)));
+	push_value(emptylist);
+}
+
+void VirtualMachine::finish_list() {
+	auto sz = calcStack.size();
+	auto p = sz;
+	while (p>0) {
+		auto q = p-1;
+		const Value &x = calcStack[q];
+		bool pp = x.type() == json::array && (x.flags() & paramPackValue);
+		if (pp) break;
+		p = q;
+	}
+	if (p == 0) {
+		throw std::runtime_error("List is not started");
+	}
+	Value clv = calcStack[p-1];
+	auto lv = ValueListValue::create(sz-p+clv.size());
+	for (Value x: clv) {
+		lv->push_back(x.getHandle());
+	}
+	for (auto i = p; i < sz; i++) {
+		lv->push_back(calcStack[i].getHandle());
+	}
+	calcStack.resize(p-1);
+	push_value(json::PValue::staticCast(lv));
+}
 
 }
 

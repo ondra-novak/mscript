@@ -27,11 +27,10 @@ enum class Cmd:std::uint8_t{
 	push_double,	///<push double 8 bytes
 	push_const_1,	///<push constant from array of consts 1 byte index
 	push_const_2,   ///<push constant from array of consts 2 bytes index
-	def_param_pack_1,  ///<define param pack 1 byte
-	def_param_pack_2,  ///<define param pack 2 bytes
-	expand_param_pack_1,  ///<similar to def, if last item is array, it is expanded - 1 byte
-	expand_param_pack_2,  ///<similar to def, if last item is array, it is expanded - 2 bytes
-	collapse_param_pack, ///<if param pack defined, it is collapsed to array or single value
+	begin_list, ///<start building param pack
+	close_list, ///<finish building param pack
+	expand_array, ///<expand array to stack (...)
+	collapse_list, ///<if param pack defined, it is collapsed to array or single value
 	dup,			   ///<duplicate item on stack
 	del,				///<del item on stack
 	dup_1,			   ///<duplicate nth-item on stack
@@ -42,9 +41,11 @@ enum class Cmd:std::uint8_t{
 	deref,				///<pick value and index, derefence object or array
 	deref_1,			///<dereference value, pick index from consts 1 byte
 	deref_2,			///<dereference value, pick index from consts 2 byte
-	deref_fn_1,			///<dereference of function of the value
-	deref_fn_2,			///<dereference of function of the value
 	call,				///<call function, requires <arguments as list><function>
+	call_1,				///<call function, requires <arguments as list><function>
+	call_2,				///<call function, requires <arguments as list><function>
+	mcall_1,			///<call method, requires <arguments as list><object> - argument is fn-name
+	mcall_2,			///<call method, requires <arguments as list><object> - argument is fn-name
 	exec_block,			///<execute block, requires <block> -> returns result
 	push_scope,			///<create empty scope
 	pop_scope,			///<destroy toplevel scope
@@ -189,10 +190,10 @@ protected:
 	double load_double();
 
 	void getVar(VirtualMachine &vm, std::intptr_t idx);
+	Value pickVar(VirtualMachine &vm, std::intptr_t idx);
 	void deref(VirtualMachine &vm, Value idx);
-	void deref_fn(VirtualMachine &vm, Value idx);
 	void call_fn(VirtualMachine &vm);
-	void call_method(VirtualMachine &vm, std::intptr_t param_pack_size);
+	void mcall_fn(VirtualMachine &vm, Value method);
 	void exec_block(VirtualMachine &vm);
 	void do_raise(VirtualMachine &vm);
 	void set_var(VirtualMachine &vm, std::intptr_t cindex);

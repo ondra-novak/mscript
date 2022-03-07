@@ -176,6 +176,7 @@ public:
 
 
 	void push_value(const Value &push);
+	void push_values(const Value &arra);
 	void del_value();
 	void dup_value();
 	void swap_value();
@@ -242,7 +243,7 @@ public:
 	 * @retval true function executed asynchronously - result will be available on next cycle
 	 */
 	template<typename ... Args>
-	bool call_function(Value fnval, const Args & ... args);
+	bool call_function(Value fnval, Value object, const Args & ... args);
 
 	///Calls function, while arguments are already ready on stack
 	/**
@@ -251,7 +252,7 @@ public:
 	 * @retval false function executed synchronously - result is immediately available
 	 * @retval true function executed asynchronously - result will be available on next cycle
 	 */
-	bool call_function_raw(Value fnval);
+	bool call_function_raw(Value fnval, Value object);
 
 
 	bool isComileTime() const {
@@ -290,6 +291,8 @@ public:
 		return taskStack;
 	}
 
+	void begin_list();
+	void finish_list();
 
 protected:
 
@@ -316,10 +319,10 @@ protected:
 };
 
 template<typename ... Args>
-inline bool VirtualMachine::call_function(Value fnval, const Args &... args) {
+inline bool VirtualMachine::call_function(Value fnval, Value object, const Args &... args) {
 	push_arguments(args...);
 	define_param_pack(sizeof...(Args));
-	return call_function_raw(fnval);
+	return call_function_raw(fnval, object);
 }
 
 

@@ -286,6 +286,7 @@ namespace mscript {
 		DerefernceNode(PNode &&left, PNode &&right);
 	};
 
+
 	class DerefernceDotNode: public Expression {
 	public:
 		DerefernceDotNode(PNode &&left, Value identifier);
@@ -368,7 +369,7 @@ namespace mscript {
 	public:
 		UserFn(Value &&code, std::vector<std::string> &&identifiers)
 			:code(std::move(code)), identifiers(identifiers) {}
-		virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value closure) const override;
+		virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value object, Value closure) const override;
 		const Value& getCode() const {return code;}
 		const std::vector<std::string>& getIdentifiers() const {return identifiers;}
 

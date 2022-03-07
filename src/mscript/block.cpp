@@ -25,11 +25,10 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::push_double,"PUSHF $F"},
 	{Cmd::push_const_1,"PUSHC @1"},
 	{Cmd::push_const_2,"PUSHC @2"},
-	{Cmd::def_param_pack_1,"MKLIST $1"},
-	{Cmd::def_param_pack_2,"MKLIST $2"},
-	{Cmd::expand_param_pack_1,"MKLISTEX $1"},
-	{Cmd::expand_param_pack_2,"MKLISTEX $2"},
-	{Cmd::collapse_param_pack,"COLPSLST"},
+	{Cmd::begin_list,"LSTART"},
+	{Cmd::close_list,"LFINISH"},
+	{Cmd::collapse_list,"COLPSLST"},
+	{Cmd::expand_array, "EXPDARR"},
 	{Cmd::dup,"DUP"},
 	{Cmd::dup_1,"DUP $1"},
 	{Cmd::del,"DEL"},
@@ -40,9 +39,11 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::deref,"DEREF"},
 	{Cmd::deref_1,"DEREF @1"},
 	{Cmd::deref_2,"DEREF @2"},
-	{Cmd::deref_fn_1,"DEREF_FN @1"},
-	{Cmd::deref_fn_2,"DEREF_FN @2"},
 	{Cmd::call,"CALL"},
+	{Cmd::call_1,"CALL @1"},
+	{Cmd::call_2,"CALL @2"},
+	{Cmd::mcall_1,"MCALL @1"},
+	{Cmd::mcall_2,"MCALL @2"},
 	{Cmd::exec_block,"EXEC"},
 	{Cmd::push_scope,"PUSH_SCOPE"},
 	{Cmd::pop_scope,"POP_SCOPE"},
@@ -136,11 +137,10 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::push_double: vm.push_value(load_double());break;
 			case Cmd::push_const_1: vm.push_value(block.consts[load_int1()]);break;
 			case Cmd::push_const_2: vm.push_value(block.consts[load_int2()]);break;
-			case Cmd::def_param_pack_1: vm.define_param_pack(load_int1());break;
-			case Cmd::def_param_pack_2: vm.define_param_pack(load_int2());break;
-			case Cmd::expand_param_pack_1: expand_param_pack(vm,load_int1());break;
-			case Cmd::expand_param_pack_2: expand_param_pack(vm,load_int2());break;
-			case Cmd::collapse_param_pack: vm.collapse_param_pack();break;
+			case Cmd::begin_list: vm.begin_list();break;
+			case Cmd::close_list: vm.finish_list();break;
+			case Cmd::expand_array: vm.push_values(vm.pop_value());break;
+			case Cmd::collapse_list: vm.collapse_param_pack();break;
 			case Cmd::dup: vm.dup_value();break;
 			case Cmd::dup_1: vm.dup_value(load_int1());break;
 			case Cmd::del: vm.del_value();break;
@@ -151,9 +151,11 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::deref: deref(vm,vm.pop_value());break;
 			case Cmd::deref_1: deref(vm,block.consts[load_int1()]);break;
 			case Cmd::deref_2: deref(vm,block.consts[load_int2()]);break;
-			case Cmd::deref_fn_1: deref_fn(vm,block.consts[load_int1()]);break;
-			case Cmd::deref_fn_2: deref_fn(vm,block.consts[load_int2()]);break;
-			case Cmd::call: call_fn(vm);break;
+			case Cmd::call: vm.call_function_raw(vm.pop_value(),Value());break;
+			case Cmd::call_1: vm.call_function_raw(pickVar(vm, load_int1()),Value());break;
+			case Cmd::call_2: vm.call_function_raw(pickVar(vm, load_int2()),Value());break;
+			case Cmd::mcall_1: mcall_fn(vm,block.consts[load_int1()]);break;
+			case Cmd::mcall_2: mcall_fn(vm,block.consts[load_int2()]);break;
 			case Cmd::exec_block: exec_block(vm);break;
 			case Cmd::push_scope: vm.push_scope(Value());break;
 			case Cmd::pop_scope: vm.pop_scope();break;
@@ -281,6 +283,18 @@ void BlockExecution::getVar(VirtualMachine &vm, std::intptr_t idx) {
 	}
 }
 
+Value BlockExecution::pickVar(VirtualMachine &vm, std::intptr_t idx) {
+	Value name = block.consts[idx];
+	Value out;
+	if (!vm.get_var(name.getString(), out)) {
+		variable_not_found(vm, name.getString());
+		return Value();
+	} else {
+		return out;
+	}
+
+}
+
 void BlockExecution::deref(VirtualMachine &vm, Value idx) {
 	try {
 		Value z = vm.pop_value();
@@ -317,6 +331,13 @@ Value BlockExecution::op_checkbound(const Value &a, const Value &b) {
 	return (idx >= 0 && idx < static_cast<std::intptr_t>(a.size()));
 }
 
+void BlockExecution::mcall_fn(VirtualMachine &vm, Value method) {
+	Value obj = vm.pop_value();
+	Value m = obj[method.getString()];
+	vm.call_function_raw(m,obj);
+
+}
+
 Value BlockExecution::do_deref(const Value where, const Value &what) {
 	switch (what.type()) {
 		case json::number: return  where[what.getUInt()];break;
@@ -326,29 +347,9 @@ Value BlockExecution::do_deref(const Value where, const Value &what) {
 
 }
 
-void BlockExecution::deref_fn(VirtualMachine &vm, Value idx) {
-	try {
-		Value z = vm.pop_value();
-		auto className = strTypeClasses[z.type()];
-
-		Value x;
-		if (vm.get_var(className, x)) {
-			x = do_deref(x, idx);
-		} else {
-			x = do_deref(x, idx);
-			if (!x.defined()) {
-				x = do_deref(z,idx);
-			}
-		}
-		vm.push_value(x);
-	} catch (...) {
-		vm.raise(std::current_exception());
-	}
-}
-
 void BlockExecution::call_fn(VirtualMachine &vm) {
 	Value fn = vm.pop_value();
-	vm.call_function_raw(fn);
+	vm.call_function_raw(fn,Value());
 }
 
 
