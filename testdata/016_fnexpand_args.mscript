@@ -1,0 +1,10 @@
+FN=(a,b...)=>{
+    printnl("B=",b)
+    printnl("User ",a," says: ", b...)
+    printnl()
+}
+
+FN("Ondra","Hello ","World")
+FN("Test","AAA ")
+FN("Test2")
+FN()

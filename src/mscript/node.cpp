@@ -221,8 +221,8 @@ void MethodCallNode::generateExpression(BlockBld &blk) const {
 class FunctionTask: public BlockExecution {
 public:
 	///Requires identifiers and block
-	FunctionTask(const std::vector<std::string> &identifiers, Value block, Value object, Value closure)
-		:BlockExecution(block) ,identifiers(identifiers),object(object),closure(closure) {}
+	FunctionTask(const std::vector<std::string> &identifiers, bool expand_last, Value block, Value object, Value closure)
+		:BlockExecution(block) ,identifiers(identifiers),object(object),closure(closure),expand_last(expand_last) {}
 
 	///Called during init
 	/**
@@ -236,9 +236,16 @@ public:
 		scope = true;
 		auto args = vm.top_params();
 		std::size_t idx = 0;
-		for (const auto &a: identifiers) {
-			vm.set_var(a, args[idx]);
+		auto i = identifiers.begin();
+		bool expl = expand_last && !identifiers.empty();
+		auto e = expl?(identifiers.begin()+identifiers.size()-1):identifiers.end();
+		while (i != e) {
+			vm.set_var(*i, args[idx]);
+			++i;
 			++idx;
+		}
+		if (expl) {
+			vm.set_var(identifiers.back(),args.toValue().slice(identifiers.size()-1));
 		}
 		vm.del_value();
 		return BlockExecution::init(vm);
@@ -270,17 +277,18 @@ protected:
 	const std::vector<std::string> &identifiers;
 	Value object;
 	Value closure;
+	bool expand_last;
 };
 
 
 std::unique_ptr<AbstractTask> UserFn::call(VirtualMachine &vm, Value object, Value closure) const  {
-	return std::make_unique<FunctionTask>(identifiers, code, object, closure);
+	return std::make_unique<FunctionTask>(identifiers, expand_last,code,  object, closure);
 }
 
 
-Value defineUserFunction(std::vector<std::string> &&identifiers, PNode &&body, const CodeLocation &loc) {
+Value defineUserFunction(std::vector<std::string> &&identifiers, bool expand_last, PNode &&body, const CodeLocation &loc) {
 	Value code = packToValue(buildCode(body, loc));
-	auto ptr = std::make_unique<UserFn>(std::move(code), std::move(identifiers));
+	auto ptr = std::make_unique<UserFn>(std::move(code), std::move(identifiers), expand_last);
 	Value name = {"@FN",loc.file, loc.line};
 	return packToValue(std::unique_ptr<AbstractFunction>(std::move(ptr)), name);
 }
@@ -433,16 +441,17 @@ void SimpleAssignNode::generateExpression(BlockBld &blk) const {
 	blk.pushInt(blk.pushConst(ident.toString()), Cmd::set_var_1,2);
 }
 
-PackAssignNode::PackAssignNode(std::vector<Value> &&idents, Value expandIdent):idents(std::move(idents)),expandIdent(std::move(expandIdent)) {
+PackAssignNode::PackAssignNode(std::vector<Value> &&idents, Value expandIdent)
+	:idents(std::move(idents)),expandIdent(std::move(expandIdent)) {
 
 }
 
 void PackAssignNode::generateExpression(BlockBld &blk) const {
 	if (!idents.empty()) {
-		Value idents(json::array,
+		Value is(json::array,
 				idents.begin(),
 				idents.end(),[](Value x){return x;});
-		blk.pushInt(blk.pushConst(idents), Cmd::set_var_1,2);
+		blk.pushInt(blk.pushConst(is), Cmd::set_var_1,2);
 	}
 	if (expandIdent.defined()) {
 		blk.pushInt(idents.size(), Cmd::collapse_list_1, 1);

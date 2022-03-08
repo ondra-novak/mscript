@@ -313,12 +313,12 @@ PValueListNode Compiler::compileValueList() {
 PNode Compiler::compileDefineFunction(PNode expr) {
 	const Identifier *in = dynamic_cast<const Identifier *>(expr.get());
 	std::vector<std::string> identifiers;
+	bool expandLast = false;
 	if (in) {
 		identifiers.push_back(in->getName().getString());
 	} else {
 		ValueListNode &pp = dynamic_cast<ValueListNode &>(*expr);
 		const auto &items = pp.getItems();
-		bool expandLast = false;
 		for (const ValueListNode::Item &k: items) {
 			const Identifier *x = dynamic_cast<const Identifier *>(k.node.get());
 			if (x == nullptr) throw compileError("Expected identifier in argument of the function definition");
@@ -329,7 +329,7 @@ PNode Compiler::compileDefineFunction(PNode expr) {
 	}
 	commit();
 	PNode blk=compileBlockOrExpression();
-	Value fn = defineUserFunction(std::move(identifiers), std::move(blk), {loc.file, loc.line+curLine});
+	Value fn = defineUserFunction(std::move(identifiers), expandLast,std::move(blk), {loc.file, loc.line+curLine});
 	return std::make_unique<ValueNode>(fn);
 
 }

@@ -330,7 +330,7 @@ namespace mscript {
 	};
 
 
-	Value defineUserFunction(std::vector<std::string> &&identifiers, PNode &&body, const CodeLocation &loc);
+	Value defineUserFunction(std::vector<std::string> &&identifiers, bool expand_last, PNode &&body, const CodeLocation &loc);
 
 	Block buildCode(const PNode &nd, const CodeLocation &loc);
 
@@ -388,15 +388,17 @@ namespace mscript {
 
 	class UserFn: public AbstractFunction {
 	public:
-		UserFn(Value &&code, std::vector<std::string> &&identifiers)
-			:code(std::move(code)), identifiers(identifiers) {}
+		UserFn(Value &&code, std::vector<std::string> &&identifiers, bool expand_last)
+			:code(std::move(code)), identifiers(identifiers),expand_last(expand_last) {}
 		virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value object, Value closure) const override;
 		const Value& getCode() const {return code;}
 		const std::vector<std::string>& getIdentifiers() const {return identifiers;}
+		bool is_expand_all() const {return expand_last;}
 
 	protected:
 		Value code;
 		std::vector<std::string> identifiers;
+		bool expand_last;
 	};
 
 	class SimpleAssignNode: public ConstantLeaf {

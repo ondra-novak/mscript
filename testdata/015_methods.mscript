@@ -1,0 +1,23 @@
+Counter=(begin,step)=>{    #konstruktor (funkce)
+	object {               #vraci objekt
+		A=begin			   #inicializace 
+		B=step
+		next=()=>{		   #metoda 
+			S=A+B		   #vypocet S dalsi hodnoty
+			(S, object this {   #this je immutable, je treba vyrobit novy objekt
+				A=S             #ktery obsahuje zmenenou promennou A
+			})	                #vraci (vysledne cislo a novy objekt)
+				
+		}		
+	}
+}
+		
+C=Counter(0,5)             #zkonstruuj objekt
+
+for(I:1..10) {             #pouzij 10x
+	(A,C)=C.next()         #v kazdem cyklu uloz vysledek do A a prepis C
+	printnl(A)             #vytiskni A
+	C	                   #cely cyklus vraci finalni revizi objektu
+}                          #ta by se kdyztak priradila do nejake promenne
+
+# result - ten objekt

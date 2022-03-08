@@ -12,13 +12,9 @@
 
 namespace mscript {
 
-Scope::Scope(Value base, Value parentLink):base(base),parentLink(parentLink) {}
 
 Scope::Scope(Value base):base(base) { }
 
-Value Scope::create_parent_link() {
-	return {convertToObject(), parentLink};
-}
 
 Value Scope::convertToObject() const {
 	json::Object obj(base);
@@ -67,13 +63,17 @@ void VirtualMachine::push_scope(const Value base) {
 	auto sz = scopeStack.size();
 	if (!sz) {
 		//if base is not defined, we can bind globalScope to current scope without need to create link
-		if (!base.defined()) scopeStack.emplace_back(globalScope);
-		else scopeStack.emplace_back(base, Value({globalScope,nullptr}));
+		if (!base.defined()) {
+			scopeStack.emplace_back(globalScope);
+		}
+		else {
+			scopeStack.emplace_back(globalScope);
+			scopeStack.emplace_back(base);
+		}
 	} else if (sz >= cfg.maxScopeStack) {
 		throw ExecutionLimitReached(LimitType::scopeStack);
 	} else {
-		Value parentLink = scopeStack.back().create_parent_link();
-		scopeStack.emplace_back(base,parentLink);
+		scopeStack.emplace_back(base);
 	}
 }
 
@@ -92,14 +92,12 @@ bool VirtualMachine::get_var(const std::string_view &name, Value &value) {
 		value = globalScope[name];
 		return value.defined();
 	}
-	const auto &scope = scopeStack.back();
-	value = scope[name];
-	if (value.defined()) return true;
-	Value link = scope.get_parent_link();
-	while (link.hasValue()) {
-		value = link[0][name];
-		if (value.defined()) return true;
-		link = link[1];
+	auto r = scopeStack.rbegin();
+	while (r != scopeStack.rend()) {
+		if (r->get(name, value)) {
+			return value.defined();
+		}
+		++r;
 	}
 	return false;
 }
@@ -151,11 +149,19 @@ bool VirtualMachine::pop_scope() {
 	return true;
 }
 
-Value Scope::operator [](const std::string_view &name) const {
+bool Scope::get(const std::string_view &name, Value &out) const {
 	auto iter = items.find(name);
-	if (iter == items.end()) return base[name];
-	else return iter->second;
+	if (iter == items.end()) {
+		out = base[name];
+		return out.getKey() == name;
+	}
+	else {
+		out = iter->second;
+		return true;
+	}
+
 }
+
 
 bool Scope::set(const std::string_view &name, const Value &v) {
 	auto res = items.emplace(std::string(name), v);
@@ -182,9 +188,18 @@ void VirtualMachine::push_value(const Value &val) {
 }
 
 Value VirtualMachine::get_this() {
-	if (scopeStack.empty()) return json::undefined;
-	const auto &scope = scopeStack.back();
-	return scope.get_parent_link()[0];
+	auto sz = scopeStack.size();
+	if (sz<2) return json::undefined;
+	auto &topscope = scopeStack.back();
+	auto iter = topscope.find("this");
+	if (iter == topscope.end()) {
+		const auto &scope = scopeStack[sz-2];
+		Value t =  scope.convertToObject();
+		topscope.set("this", t);
+		return t;
+	} else {
+		return iter->second;
+	}
 }
 
 bool VirtualMachine::restore_state(const VMState &st) {

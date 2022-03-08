@@ -74,25 +74,20 @@ public:
 
 class Scope {
 public:
-	Scope(Value base, Value parentLink);
 	Scope(Value base);
 
-	Value create_parent_link();
-	const Value &get_parent_link() const {return parentLink;}
-
-
 	Value convertToObject() const;
-	Value operator[](const std::string_view &name) const;
+
 	bool set(const std::string_view &name, const Value &v);
 
 	auto begin() const {return items.begin();}
 	auto end() const {return items.end();}
 	Value getBase() const {return base;}
-	auto find(const std::string &name) const {return items.find(name);}
+	auto find(const std::string_view &name) const {return items.find(name);}
+	bool get(const std::string_view &name, Value &out) const;
 
 protected:
 	Value base;
-	Value parentLink;
 	std::map<std::string, Value, std::less<> > items;
 
 };
