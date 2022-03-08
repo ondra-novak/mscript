@@ -27,7 +27,7 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::push_const_2,"PUSHC @2"},
 	{Cmd::begin_list,"LSTART"},
 	{Cmd::close_list,"LFINISH"},
-	{Cmd::collapse_list,"COLPSLST"},
+	{Cmd::collapse_list_1,"COLPSLST $1"},
 	{Cmd::expand_array, "EXPDARR"},
 	{Cmd::dup,"DUP"},
 	{Cmd::dup_1,"DUP $1"},
@@ -140,7 +140,7 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::begin_list: vm.begin_list();break;
 			case Cmd::close_list: vm.finish_list();break;
 			case Cmd::expand_array: vm.push_values(vm.pop_value());break;
-			case Cmd::collapse_list: vm.collapse_param_pack();break;
+			case Cmd::collapse_list_1: vm.collapse_param_pack();vm.push_value(vm.pop_value().slice(load_int1()));break;
 			case Cmd::dup: vm.dup_value();break;
 			case Cmd::dup_1: vm.dup_value(load_int1());break;
 			case Cmd::del: vm.del_value();break;
@@ -232,8 +232,18 @@ bool BlockExecution::exception(VirtualMachine &vm, std::exception_ptr e) {
 }
 
 std::optional<CodeLocation> BlockExecution::getCodeLocation() const {
-	return std::optional<CodeLocation>();
-	//TODO: return CodeLocation{block.location.file, block.location.line+line};
+	//ip points to next instruction, which can be also next line, so decrease ip by one
+	auto pos = ip;
+	if (pos) pos--;
+	auto iter = std::lower_bound(block.lines.begin(), block.lines.end(), std::pair{std::size_t(pos),std::size_t(-1)},std::greater());
+	std::size_t l;
+	if (iter == block.lines.end()) {
+		l = 0;
+	} else {
+		l = iter->second;
+	}
+
+	return std::optional<CodeLocation>({block.location.file, block.location.line+l});
 }
 
 std::intptr_t BlockExecution::load_int1() {

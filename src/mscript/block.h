@@ -30,7 +30,7 @@ enum class Cmd:std::uint8_t{
 	begin_list, ///<start building param pack
 	close_list, ///<finish building param pack
 	expand_array, ///<expand array to stack (...)
-	collapse_list, ///<if param pack defined, it is collapsed to array or single value
+	collapse_list_1, ///<converts value list to array, skipping first N items (argument)
 	dup,			   ///<duplicate item on stack
 	del,				///<del item on stack
 	dup_1,			   ///<duplicate nth-item on stack
@@ -131,8 +131,10 @@ struct Block {
 public:
 	///constants - pushed from code to stack
 	std::vector<Value> consts;
-	///
+	///code
 	std::vector<std::uint8_t> code;
+	///Addresses map to lines - for debugging
+	std::vector<std::pair<std::size_t,std::size_t>> lines; //{code, line, ordered backward}
 
 	CodeLocation location;
 
@@ -151,7 +153,7 @@ public:
 };
 
 static inline Value packToValue(Block &&block) {
-	return json::makeValue(std::move(block), json::Object{{"@BLOCK",{block.location.file, block.location.line}}});
+	return json::makeValue(std::move(block), {"@BLOCK",block.location.file, block.location.line});
 }
 
 static inline bool isBlock(const Value &v) {

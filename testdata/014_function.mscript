@@ -1,0 +1,9 @@
+FN=(a,b)=>{
+    printnl(a," ",b)
+}
+FN("Hello","World")
+
+FN2=a=>{
+    printnl(a)
+}
+FN2("I am fine!")

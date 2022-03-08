@@ -269,7 +269,7 @@ bool VirtualMachine::call_function_raw(Value fnval, Value object) {
 		throw ArgumentIsNotFunction(fnval);
 	} else {
 		const AbstractFunction &fnobj = getFunction(fnval);
-		auto task = fnobj.call(*this,object,fnval);
+		auto task = fnobj.call(*this,object,fnval.type()==json::object?fnval:Value());
 		if (task != nullptr) {
 			push_task(std::move(task));
 			return true;

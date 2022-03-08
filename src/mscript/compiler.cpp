@@ -74,10 +74,10 @@ PNode Compiler::handleValueSuffixes(PNode expr) {
 	switch (s.symbol) {
 	case Symbol::s_left_bracket:
 		commit();
-		return handleValueSuffixes(std::make_unique<FunctionCall>(std::move(expr), parseParamPack()));
+		return handleValueSuffixes(std::make_unique<FunctionCall>(std::move(expr), compileValueList()));
 	case Symbol::s_left_square_bracket:
 		commit();
-		tmp = parseValue();
+		tmp = compileValue();
 		sync(Symbol::s_right_square_bracket);
 		return handleValueSuffixes(std::make_unique<DerefernceNode>(std::move(expr), std::move(tmp)));
 	case Symbol::s_dot:
@@ -89,7 +89,7 @@ PNode Compiler::handleValueSuffixes(PNode expr) {
 			auto t = next();
 			if (t.symbol == Symbol::s_left_bracket) {
 				commit();
-				return handleValueSuffixes(std::make_unique<MethodCallNode>(std::move(expr), s.data, parseParamPack()));
+				return handleValueSuffixes(std::make_unique<MethodCallNode>(std::move(expr), s.data, compileValueList()));
 			} else {
 				return handleValueSuffixes(std::make_unique<DerefernceDotNode>(std::move(expr), s.data));
 			}
@@ -101,7 +101,7 @@ PNode Compiler::handleValueSuffixes(PNode expr) {
 	}
 }
 
-PNode Compiler::parseValue() {
+PNode Compiler::compileValue() {
 	PNode out;
 	auto s = next();
 	switch(s.symbol) {
@@ -137,23 +137,23 @@ PNode Compiler::parseValue() {
 	case Symbol::kw_exec:
 		commit();
 		checkBeginBlock();
-		out = std::make_unique<KwExecNode>(parseValue());
+		out = std::make_unique<KwExecNode>(compileValue());
 		break;
 	case Symbol::kw_with: {
 			commit();
-			PNode obj = parseValue();
+			PNode obj = compileValue();
 			checkBeginBlock();
-			PNode blk = parseValue();
+			PNode blk = compileValue();
 			out = std::make_unique<KwWithNode>(std::move(obj), std::move(blk));
 			out = std::move(out);
 		}
 		break;
 	case Symbol::kw_object: {
 			commit();
-			PNode x = parseValue();
+			PNode x = compileValue();
 			auto n = next();
 			if (n.symbol == Symbol::identifier || n.symbol == Symbol::s_left_brace) {
-				PNode y = parseValue();
+				PNode y = compileValue();
 				out = std::make_unique<KwExecObjectNode>(std::move(x), std::move(y));
 			} else {
 				out = std::make_unique<KwExecNewObjectNode>(std::move(x));
@@ -168,7 +168,7 @@ PNode Compiler::parseValue() {
 
 	case Symbol::s_left_bracket:
 		commit();
-		out = parseParamPack();
+		out = compileValueList();
 		if (next().symbol == Symbol::s_arrow) out = compileDefineFunction(std::move(out));
 		break;
 	case Symbol::s_left_brace:
@@ -178,11 +178,11 @@ PNode Compiler::parseValue() {
 		break;
 	case Symbol::s_exclamation:
 		commit();
-		out = std::make_unique<UnaryOperation>(parseValue(),Cmd::op_bool_not);
+		out = std::make_unique<UnaryOperation>(compileValue(),Cmd::op_bool_not);
 		break;
 	case Symbol::kw_not:
 		commit();
-		out = std::make_unique<UnaryOperation>(parseValue(),Cmd::op_bool_not);
+		out = std::make_unique<UnaryOperation>(compileValue(),Cmd::op_bool_not);
 		break;
 	case Symbol::s_minus:
 		commit();
@@ -191,12 +191,12 @@ PNode Compiler::parseValue() {
 			auto d = static_cast<const NumberNode *>(c.get());
 			out = std::make_unique<NumberNode>(-(d->getValue().getNumber()));
 		} else {
-			out = std::make_unique<UnaryOperation>(parseValue(),Cmd::op_unary_minus);
+			out = std::make_unique<UnaryOperation>(compileValue(),Cmd::op_unary_minus);
 		}
 		break;
 	case Symbol::s_plus:
 		commit();
-		out = parseValue();
+		out = compileValue();
 		break;
 	case Symbol::s_left_square_bracket:
 		commit();
@@ -235,7 +235,7 @@ PNode Compiler::parseValue() {
 }
 
 PNode Compiler::parseIfElse() {
-	PNode cond = parseValue();
+	PNode cond = compileValue();
 	checkBeginBlock();
 	PNode blk1 = compileBlockOrExpression();
 	bool eat = eatSeparators();
@@ -256,7 +256,37 @@ PNode Compiler::parseIfElse() {
 
 }
 
-PParamPackNode Compiler::parseParamPack() {
+PValueListNode Compiler::compileValueList() {
+	ValueListNode::Items items;
+	if (next().symbol != Symbol::s_right_bracket) {
+		bool rep = true;
+		while (rep) {
+			eatSeparators();
+			PNode n = compileExpression();
+			bool expand = false;
+			if (next().symbol == Symbol::s_threedots) {
+				expand = true;
+				commit();
+			}
+			items.push_back({
+				std::move(n),
+				expand
+			});
+			eatSeparators();
+			if (next().symbol == Symbol::s_comma) {
+				commit();
+			} else {
+				sync(Symbol::s_right_bracket);
+				rep = false;
+			}
+		}
+	} else {
+		commit();
+	}
+	return std::make_unique<ValueListNode>(std::move(items));
+}
+
+/*PParamPackNode Compiler::parseParamPack() {
 	if (next().symbol == Symbol::s_right_bracket) {
 		commit();
 		return std::make_unique<EmptyParamPackNode>();
@@ -276,7 +306,9 @@ PParamPackNode Compiler::parseParamPack() {
 	}
 	sync(Symbol::s_right_bracket);
 	return s;
-}
+}*/
+
+
 
 PNode Compiler::compileDefineFunction(PNode expr) {
 	const Identifier *in = dynamic_cast<const Identifier *>(expr.get());
@@ -284,26 +316,19 @@ PNode Compiler::compileDefineFunction(PNode expr) {
 	if (in) {
 		identifiers.push_back(in->getName().getString());
 	} else {
-		try {
-			AbstractParamPackNode &pp = dynamic_cast<AbstractParamPackNode &>(*expr);
-			std::vector<PNode> nodes;
-			pp.moveTo(nodes);
-			for (const PNode &k: nodes) {
-				const Identifier &x = dynamic_cast<const Identifier &>(*k);
-				identifiers.push_back(x.getName().getString());
-			}
-		} catch (const std::bad_cast &) {
-			throw compileError("Invalid function parameter definition");
+		ValueListNode &pp = dynamic_cast<ValueListNode &>(*expr);
+		const auto &items = pp.getItems();
+		bool expandLast = false;
+		for (const ValueListNode::Item &k: items) {
+			const Identifier *x = dynamic_cast<const Identifier *>(k.node.get());
+			if (x == nullptr) throw compileError("Expected identifier in argument of the function definition");
+			if (expandLast) throw compileError("Symbol ... (three dots) is allowed only for the last argument");
+			expandLast = k.expandArray;
+			identifiers.push_back(x->getName().getString());
 		}
 	}
 	commit();
-	PNode blk;
-	if (next().symbol != Symbol::s_left_brace) {
-		blk = compileBlockContent();
-	} else {
-		commit();
-		blk = compileBlock();
-	}
+	PNode blk=compileBlockOrExpression();
 	Value fn = defineUserFunction(std::move(identifiers), std::move(blk), {loc.file, loc.line+curLine});
 	return std::make_unique<ValueNode>(fn);
 
@@ -347,6 +372,7 @@ PNode Compiler::compileBlockContent() {
 
 	auto s = next();
 	while (s.symbol != Symbol::s_right_brace && s.symbol != Symbol::eof) {
+		auto l = curLine;
 		if (s.symbol != Symbol::separator) {
 			PNode cmd = compileCommand();
 			Value bk = packToValue(buildCode(cmd, loc));
@@ -357,7 +383,7 @@ PNode Compiler::compileBlockContent() {
 			vm.push_task(std::make_unique<BlockExecution>(bk));
 			while (vm.run());
 			if (err) {
-				nodes.push_back(std::move(cmd));
+				nodes.push_back(std::make_unique<InputLineMapNode>(l,std::move(cmd)));
 			} else {
 				clear = false;
 			}
@@ -424,46 +450,59 @@ PNode Compiler::compileCommand() {
 
 }
 
-PNode Compiler::tryCompileAssgn() {
+
+Compiler::ValueListAssign Compiler::parseValueListAssign() {
+	Compiler::ValueListAssign ret;
+	ret.valid = false;
 	auto s = next();
 	if (s.symbol==Symbol::identifier) {
 		commit();
-		if (next().symbol==Symbol::s_equal || next().symbol==Symbol::s_qequal) {
-			return std::make_unique<SimpleAssignNode>(s.data);
-		}else{
-			return nullptr;
-		}
+		ret.single = s.data;
 	} else if (s.symbol ==Symbol::s_left_bracket){
-        std::vector<Value> idents;
         do {
         	commit();
         	s = next();
         	if (s.symbol==Symbol::identifier) {
-        		idents.push_back(s.data);
+        		ret.list.push_back(s.data);
         		commit();
         	} else if (s.symbol == Symbol::s_minus) {
         		commit();
-        		idents.push_back(nullptr);
+        		ret.list.push_back(nullptr);
         	} else {
-        		return nullptr;
+        		return ret;
         	}
         	s = next();
         } while (s.symbol==Symbol::s_comma);
-        if (s.symbol ==Symbol::s_right_bracket){
+        if (s.symbol == Symbol::s_threedots) {
+        	ret.expand = ret.list.back();
+        	ret.list.pop_back();
         	commit();
-    		if (next().symbol==Symbol::s_equal) {
-    			return std::make_unique<PackAssignNode>(std::move(idents));
-    		}else{
-    			return nullptr;
-    		}
-
-        } else {
-        	return nullptr;
         }
-	} else  {
-    	return nullptr;
-    }
+        if (s.symbol != Symbol::s_right_bracket) {
+        	return ret;
+        }
+        commit();
+	} else {
+		return ret;
+	}
+	ret.valid = true;
+	return ret;
+}
 
+
+PNode Compiler::tryCompileAssgn() {
+	auto vldef = parseValueListAssign();
+	if (vldef.valid) {
+		auto s = next();
+		if (s.symbol == Symbol::s_equal || s.symbol == Symbol::s_qequal) {
+			if (vldef.single.defined()) {
+				return std::make_unique<SimpleAssignNode>(vldef.single);
+			} else {
+				return std::make_unique<PackAssignNode>(std::move(vldef.list),vldef.expand);
+			}
+		}
+	}
+	return nullptr;
 }
 
 
@@ -558,7 +597,7 @@ PNode Compiler::compileMultDiv() {
 }
 
 PNode Compiler::compilePower() {
-	PNode nd = parseValue();
+	PNode nd = compileValue();
 	Cmd cmd;
 	switch(next().symbol) {
 	case Symbol::s_power: cmd = Cmd::op_power; break;
@@ -639,14 +678,14 @@ PNode Compiler::compileFor() {
 		throw compileError("Operator `for` must have an iterator 'for (iterator: container)' ");
 	}
 	checkBeginBlock(); //block follows
-	return std::make_unique<ForLoopNode>(iterator, std::move(iter_value), std::move(init), parseValue());
+	return std::make_unique<ForLoopNode>(iterator, std::move(iter_value), std::move(init), compileValue());
 }
 
 PNode Compiler::compileWhile() {
 	PNode cond = compileExpression();
 	sync(Symbol::s_right_bracket);
 	checkBeginBlock(); //block follows
-	return std::make_unique<WhileLoopNode>(std::move(cond), parseValue());
+	return std::make_unique<WhileLoopNode>(std::move(cond), compileValue());
 }
 
 PNode Compiler::compileBlockOrExpression() {
@@ -662,7 +701,7 @@ PNode Compiler::compileBlockOrExpression() {
 }
 
 CompileError Compiler::compileError(const std::string &text) {
-	return CompileError(text, {loc.file, loc.line+curLine+1});
+	return CompileError(text, {loc.file, loc.line+curLine});
 }
 
 void Compiler::syncSeparator() {
@@ -823,6 +862,7 @@ PNode Compiler::compileNumber() {
 	}
 	return std::make_unique<NumberNode>(res);
 }
+
 
 }
 

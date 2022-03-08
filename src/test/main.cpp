@@ -118,7 +118,7 @@ static int showcode(CmdArgIter &iter) {
 
 
 
-	auto block = mscript::compile(elements, getVirtualMachineRuntime(), {"input",0});
+	auto block = mscript::compile(elements, getVirtualMachineRuntime(), {"input",1});
 	block.disassemble(show_instruction);
 
 	return 0;
@@ -141,7 +141,7 @@ static int run(CmdArgIter &iter, bool debug) {
 
 	Value global = getVirtualMachineRuntime();
 
-	auto block = packToValue(mscript::compile(elements, global, {"input",0}));
+	auto block = packToValue(mscript::compile(elements, global, {"input",1}));
 
 	global.setItems({
 		{"print",defineSimpleFn([](const ValueList &ppack)->Value{

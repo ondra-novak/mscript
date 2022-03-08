@@ -42,26 +42,6 @@ void Identifier::generateExpression(BlockBld &blk) const {
 	blk.pushInt(blk.pushConst(name), Cmd::get_var_1,2);
 }
 
-ParamPackNode::ParamPackNode(PNode &&current, PNode &&nw) {
-	AbstractParamPackNode *prv = dynamic_cast<AbstractParamPackNode *>(current.get());
-	if (prv) {
-		prv->moveTo(nodes);
-		nodes.push_back(std::move(nw));
-	} else {
-		nodes.push_back(std::move(current));
-		nodes.push_back(std::move(nw));
-	}
-}
-
-
-
-void ParamPackNode::generateUnclosedExpression(BlockBld &blk) const {
-	for (const PNode &z: nodes) {
-		z->generateExpression(blk);
-	}
-
-}
-
 
 void BlockBld::pushInt(std::intptr_t val, Cmd cmd, int maxSize) {
 	if (cmd == Cmd::set_var_1) lastStorePos = code.size(); else lastStorePos = 0;
@@ -112,24 +92,6 @@ Value Identifier::getName() const {
 	return name;
 }
 
-
-void ParamPackNode::moveTo(std::vector<PNode> &nodes) {
-	for (PNode &n : this->nodes) {
-		nodes.push_back(std::move(n));
-	}
-}
-
-SingleParamPackNode::SingleParamPackNode(PNode &&n):n(std::move(n)) {}
-
-
-void SingleParamPackNode::generateUnclosedExpression(BlockBld &blk) const {
-	n->generateExpression(blk);
-}
-
-void SingleParamPackNode::moveTo(std::vector<PNode> &nodes) {
-	nodes.push_back(std::move(n));
-}
-
 NumberNode::NumberNode(Value n):n(n) {}
 
 void NumberNode::generateExpression(BlockBld &blk) const {
@@ -143,7 +105,7 @@ void NumberNode::generateExpression(BlockBld &blk) const {
 	}
 }
 
-FunctionCall::FunctionCall(PNode &&fn, PParamPackNode &&paramPack):fn(std::move(fn)),paramPack(std::move(paramPack)) {
+FunctionCall::FunctionCall(PNode &&fn, PValueListNode &&paramPack):fn(std::move(fn)),paramPack(std::move(paramPack)) {
 }
 
 void FunctionCall::generateListVars(VarSet &vars) const {
@@ -165,54 +127,6 @@ ValueNode::ValueNode(Value n):n(n) {}
 
 void ValueNode::generateExpression(BlockBld &blk) const {
 	blk.pushInt(blk.pushConst(n), Cmd::push_const_1,2);
-}
-
-void ParamPackNode::generateListVars(VarSet &vars) const {
-	for (const auto &x: nodes) x->generateListVars(vars);
-}
-
-std::size_t ParamPackNode::count() const {
-	return nodes.size();
-}
-
-void SingleParamPackNode::generateListVars(VarSet &vars) const {
-	n->generateListVars(vars);
-}
-
-std::size_t SingleParamPackNode::count() const {
-	return 1;
-}
-
-/*
-void EmptyParamPackNode::generateAssign(BlockBld &blk) const {
-	//empty - can't assign to single param pack
-}
-*/
-
-void EmptyParamPackNode::generateUnclosedExpression(BlockBld &blk) const {
-	//empty
-}
-
-void EmptyParamPackNode::moveTo(std::vector<PNode> &nodes) {
-	//empty
-}
-
-void EmptyParamPackNode::generateListVars(VarSet &vars) const {
-	//empty
-}
-
-std::size_t EmptyParamPackNode::count() const {
-	return 0;
-}
-
-void AbstractParamPackNode::generateExpression(BlockBld &blk) const {
-	if (count()==1) {
-		generateUnclosedExpression(blk);
-	} else {
-		blk.pushCmd(Cmd::begin_list);
-		generateUnclosedExpression(blk);
-		blk.pushCmd(Cmd::close_list);
-	}
 }
 
 DirectCmdNode::DirectCmdNode(Cmd cmd):cmd(cmd) {
@@ -293,7 +207,7 @@ void DerefernceDotNode::generateExpression(BlockBld &blk) const {
 DerefernceDotNode::DerefernceDotNode(PNode &&left, Value identifier)
 : left(std::move(left)),identifier(identifier) {}
 
-MethodCallNode::MethodCallNode(PNode &&left, Value identifier, PParamPackNode &&pp)
+MethodCallNode::MethodCallNode(PNode &&left, Value identifier, PValueListNode &&pp)
 :left(std::move(left)),identifier(identifier),pp(std::move(pp)) {}
 
 
@@ -327,7 +241,7 @@ public:
 			++idx;
 		}
 		vm.del_value();
-		return true;
+		return BlockExecution::init(vm);
 	}
 	///Only handles end of the function
 	/**
@@ -336,7 +250,7 @@ public:
 	 * when function exits, removes scope from the virtual machine
 	 */
 	virtual bool run(VirtualMachine &vm) {
-		if (!run(vm)) {
+		if (!BlockExecution::run(vm)) {
 			if (scope) {
 				vm.pop_scope();
 				if (object.defined()) {
@@ -367,7 +281,7 @@ std::unique_ptr<AbstractTask> UserFn::call(VirtualMachine &vm, Value object, Val
 Value defineUserFunction(std::vector<std::string> &&identifiers, PNode &&body, const CodeLocation &loc) {
 	Value code = packToValue(buildCode(body, loc));
 	auto ptr = std::make_unique<UserFn>(std::move(code), std::move(identifiers));
-	std::string name = "Function "+loc.file+":"+std::to_string(loc.line);
+	Value name = {"@FN",loc.file, loc.line};
 	return packToValue(std::unique_ptr<AbstractFunction>(std::move(ptr)), name);
 }
 
@@ -379,10 +293,13 @@ Block buildCode(const PNode &nd, const CodeLocation &loc) {
 	for (const auto &itm: bld.constMap) {
 		consts[itm.second] = itm.first;
 	}
+	auto lines = std::move(bld.lines);
+	std::sort(lines.begin(),lines.end(),std::greater());
 
 	return {
 		consts,
 		bld.code,
+		lines,
 		loc
 	};
 }
@@ -516,14 +433,21 @@ void SimpleAssignNode::generateExpression(BlockBld &blk) const {
 	blk.pushInt(blk.pushConst(ident.toString()), Cmd::set_var_1,2);
 }
 
-PackAssignNode::PackAssignNode(std::vector<Value> &&idents):idents(std::move(idents)) {
+PackAssignNode::PackAssignNode(std::vector<Value> &&idents, Value expandIdent):idents(std::move(idents)),expandIdent(std::move(expandIdent)) {
 
 }
 
 void PackAssignNode::generateExpression(BlockBld &blk) const {
-	blk.pushInt(blk.pushConst(Value(json::array,
-			idents.begin(),
-			idents.end(),[](Value x){return x;})), Cmd::set_var_1,2);
+	if (!idents.empty()) {
+		Value idents(json::array,
+				idents.begin(),
+				idents.end(),[](Value x){return x;});
+		blk.pushInt(blk.pushConst(idents), Cmd::set_var_1,2);
+	}
+	if (expandIdent.defined()) {
+		blk.pushInt(idents.size(), Cmd::collapse_list_1, 1);
+		blk.pushInt(blk.pushConst(expandIdent), Cmd::set_var_1,2);
+	}
 }
 
 void ConstantLeaf::generateListVars(VarSet &vars) const {
@@ -751,6 +675,44 @@ void BlockBld::finishJumpTo(std::size_t jmpPos, std::size_t targetPos, int sz) {
 		std::intptr_t x = distance >> shift;
 		code[jmpPos+i] = x & 0xFF;
 	}
+}
+
+ValueListNode::ValueListNode(Items &&items):items(std::move(items)) {
+}
+
+void ValueListNode::generateExpression(BlockBld &blk) const {
+	if (items.size() == 1 && items[0].expandArray == false) {
+		items[0].node->generateExpression(blk);
+	} else {
+		blk.pushCmd(Cmd::begin_list);
+		for (const Item &x: items) {
+			x.node->generateExpression(blk);
+			if (x.expandArray) blk.pushCmd(Cmd::expand_array);
+		}
+		blk.pushCmd(Cmd::close_list);
+	}
+}
+
+void ValueListNode::generateListVars(VarSet &vars) const {
+	for (const Item &x: items) {
+		x.node->generateListVars(vars);
+	}
+}
+
+void BlockBld::markLine(std::size_t ln) {
+	lines.push_back({code.size(),ln});
+}
+
+InputLineMapNode::InputLineMapNode(std::size_t line, PNode &&nx):line(line),nx(std::move(nx)) {
+}
+
+void InputLineMapNode::generateExpression(BlockBld &blk) const {
+	blk.markLine(line);
+	nx->generateExpression(blk);
+}
+
+void InputLineMapNode::generateListVars(VarSet &vars) const {
+	nx->generateListVars(vars);
 }
 
 }

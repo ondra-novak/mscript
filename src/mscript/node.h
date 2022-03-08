@@ -16,6 +16,7 @@ namespace mscript {
 	struct BlockBld {
 		std::unordered_map<Value, std::intptr_t> constMap;
 		std::vector<std::uint8_t> code;
+		std::vector<std::pair<std::size_t,std::size_t> > lines; //<code, line>
 		void pushInt(std::intptr_t val, Cmd cmd, int maxSize);
 		void pushCmd(Cmd cmd);
 		std::intptr_t pushConst(Value v);
@@ -24,6 +25,7 @@ namespace mscript {
 		std::size_t prepareJump(Cmd cmd, int sz);
 		void finishJumpHere(std::size_t jmpPos, int sz);
 		void finishJumpTo(std::size_t jmpPos, std::size_t targetPos, int sz);
+		void markLine(std::size_t ln);
 	};
 
 
@@ -147,7 +149,26 @@ namespace mscript {
 		PNode blockTree;
 	};
 
-	class AbstractParamPackNode: public Expression {
+	class ValueListNode: public Expression {
+	public:
+
+		struct Item {
+			PNode node;
+			bool expandArray;
+		};
+		using Items = std::vector<Item>;
+
+		ValueListNode(Items &&items);
+		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
+		const Items &getItems() const {return items;}
+	protected:
+		Items items;
+	};
+
+	using PValueListNode = std::unique_ptr<ValueListNode>;
+
+/*	class AbstractParamPackNode: public Expression {
 	public:
 		virtual void moveTo(std::vector<PNode> &nodes) = 0;
 		virtual std::size_t count() const = 0;
@@ -191,15 +212,15 @@ namespace mscript {
 		virtual void moveTo(std::vector<PNode> &nodes) override;;
 		virtual std::size_t count() const override;
 	};
-
+*/
 	class FunctionCall: public Expression {
 	public:
-		FunctionCall(PNode &&fn, PParamPackNode &&paramPack);
+		FunctionCall(PNode &&fn, PValueListNode &&paramPack);
 		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		virtual void generateExpression(BlockBld &blk) const override;
 		PNode fn;
-		PParamPackNode paramPack;
+		PValueListNode paramPack;
 	};
 
 	class DirectCmdNode: public ConstantLeaf {
@@ -299,13 +320,13 @@ namespace mscript {
 
 	class MethodCallNode: public Expression {
 	public:
-		MethodCallNode(PNode &&left, Value identifier, PParamPackNode &&pp);
+		MethodCallNode(PNode &&left, Value identifier, PValueListNode &&pp);
 		virtual void generateExpression(BlockBld &blk) const override;
 		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode left;
 		Value identifier;
-		PParamPackNode pp;
+		PValueListNode pp;
 	};
 
 
@@ -398,10 +419,11 @@ namespace mscript {
 
 	class PackAssignNode: public ConstantLeaf {
 	public:
-		PackAssignNode(std::vector<Value> &&idents);
+		PackAssignNode(std::vector<Value> &&idents, Value expandIdent);
 		virtual void generateExpression(BlockBld &blk) const override;
 	protected:
 		std::vector<Value> idents;
+		Value expandIdent;
 	};
 
 	class SwitchCaseNode: public Expression {
@@ -416,6 +438,17 @@ namespace mscript {
 		Labels labels;
 		Nodes nodes;
 		PNode defNode;
+	};
+
+	class InputLineMapNode: public Expression {
+	public:
+		InputLineMapNode(std::size_t line, PNode &&nx);
+		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
+	protected:
+		std::size_t line;
+		PNode nx;
+
 	};
 
 }
