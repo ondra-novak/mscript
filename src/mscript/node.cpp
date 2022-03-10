@@ -769,4 +769,23 @@ void BlockValueNode::generateListVars(VarSet &vars) const {
 	blockTree->generateListVars(vars);
 }
 
+CustomOperatorNode::CustomOperatorNode(Value name, PNode &&left, PNode &&right)
+	:name(name),left(std::move(left)),right(std::move(right))
+{
+}
+
+void CustomOperatorNode::generateExpression(BlockBld &blk) const {
+	blk.pushCmd(Cmd::begin_list);
+	left->generateExpression(blk);
+	right->generateExpression(blk);
+	blk.pushCmd(Cmd::close_list);
+	blk.pushInt(blk.pushConst("__operator"), Cmd::get_var_1,2);
+	blk.pushInt(blk.pushConst(name), Cmd::mcall_1, 2);
+}
+
+void CustomOperatorNode::generateListVars(VarSet &vars) const {
+	left->generateListVars(vars);
+	right->generateListVars(vars);
+}
+
 }

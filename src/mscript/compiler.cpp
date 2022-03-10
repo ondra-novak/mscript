@@ -538,7 +538,7 @@ PNode Compiler::compileAnd() {
 }
 
 PNode Compiler::compileCompare() {
-	PNode nd = compileRange();
+	PNode nd = compileCustomBinary();
 	Cmd cmd;
 	switch(next().symbol) {
 	case Symbol::s_dequal:
@@ -767,6 +767,18 @@ Value Compiler::expressionToConst() {
 	VirtualMachine vm;
 	vm.setMaxExecutionTime(std::chrono::seconds(5));
 	return vm.exec(std::make_unique<BlockExecution>(code));
+}
+
+PNode Compiler::compileCustomBinary() {
+	PNode a = compileRange();
+	auto s = next();
+	while (s.symbol == Symbol::identifier) {
+		commit();
+		PNode b = compileRange();
+		a = std::make_unique<CustomOperatorNode>(s.data, std::move(a), std::move(b));
+		s = next();
+	}
+	return a;
 }
 
 PNode Compiler::compileNumber() {

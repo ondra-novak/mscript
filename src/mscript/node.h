@@ -453,7 +453,17 @@ namespace mscript {
 	protected:
 		std::size_t line;
 		PNode nx;
+	};
 
+	class CustomOperatorNode: public Expression {
+	public:
+		CustomOperatorNode(Value name, PNode &&left, PNode &&right);
+		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
+	protected:
+		Value name;
+		PNode left;
+		PNode right;
 	};
 
 }

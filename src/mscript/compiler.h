@@ -68,6 +68,7 @@ protected:
 	PNode compileCommand();
 	PNode compileExpression();
 	PNode compileRange();
+	PNode compileCustomBinary();
 	PNode compileAnd();
 	PNode compileOr();
 	PNode compileCompare();

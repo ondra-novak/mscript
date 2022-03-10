@@ -1,0 +1,8 @@
+__operator=object {
+	dot_product = (a,b)=>{
+		a[0]*b[0]+a[1]*b[1]
+	}
+}
+
+Z=([1,2] dot_product [5,7])
+
