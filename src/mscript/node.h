@@ -61,6 +61,8 @@ namespace mscript {
 		BinaryOperation(PNode &&left, PNode &&right, Cmd instruction);
 		virtual void generateExpression(BlockBld &blk) const;
 		virtual void generateListVars(VarSet &vars) const override;
+		const PNode &getLeft() const {return left;}
+		const PNode &getRight() const {return right;}
 	protected:
 		PNode left, right;
 		Cmd instruction;
@@ -145,6 +147,7 @@ namespace mscript {
 	public:
 		BlockValueNode(Value n, PNode &&blockTree);
 		const PNode &getBlockTree() const;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode blockTree;
 	};
@@ -239,10 +242,6 @@ namespace mscript {
 	public:
 		NullNode(): DirectCmdNode(Cmd::push_null) {}
 	};
-	class ThisNode: public DirectCmdNode{
-	public:
-		ThisNode(): DirectCmdNode(Cmd::push_this) {}
-	};
 	class UndefinedNode: public DirectCmdNode{
 	public:
 		UndefinedNode(): DirectCmdNode(Cmd::push_undefined) {}
@@ -274,7 +273,8 @@ namespace mscript {
 		virtual void generateListVars(VarSet &vars) const override;
 	protected:
 		PNode nd_object;
-		PNode nd_block;
+
+		void pushScope(BlockBld &blk) const;
 	};
 
 
@@ -313,6 +313,8 @@ namespace mscript {
 		DerefernceDotNode(PNode &&left, Value identifier);
 		virtual void generateExpression(BlockBld &blk) const override;
 		virtual void generateListVars(VarSet &vars) const override;
+		const PNode &getLeft() const {return left;}
+		const Value getIdentifier() const {return identifier;}
 	protected:
 		PNode left;
 		Value identifier;
@@ -327,6 +329,7 @@ namespace mscript {
 		PNode left;
 		Value identifier;
 		PValueListNode pp;
+		bool canReturnValueList(const PNode &nd) const;
 	};
 
 

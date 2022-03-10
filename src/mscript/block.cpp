@@ -44,6 +44,8 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::call_2,"CALL @2"},
 	{Cmd::mcall_1,"MCALL @1"},
 	{Cmd::mcall_2,"MCALL @2"},
+	{Cmd::vlist_pop, "VLIST_POP"},
+	{Cmd::combine, "COMBINE"},
 	{Cmd::exec_block,"EXEC"},
 	{Cmd::push_scope,"PUSH_SCOPE"},
 	{Cmd::pop_scope,"POP_SCOPE"},
@@ -54,7 +56,6 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::push_false,"PUSHC false"},
 	{Cmd::push_null,"PUSHC null"},
 	{Cmd::push_undefined,"PUSHC undefined"},
-	{Cmd::push_this,"PUSHC this"},
 	{Cmd::push_zero_int,"PUSHC 0"},
 	{Cmd::push_array_1,"MKARRAY $1"},
 	{Cmd::push_array_2,"MKARRAY $2"},
@@ -143,6 +144,8 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::collapse_list_1: vm.collapse_param_pack();vm.push_value(vm.pop_value().slice(load_int1()));break;
 			case Cmd::dup: vm.dup_value();break;
 			case Cmd::dup_1: vm.dup_value(load_int1());break;
+			case Cmd::vlist_pop: vlist_pop(vm);break;
+			case Cmd::combine: combine_results(vm);break;
 			case Cmd::del: vm.del_value();break;
 			case Cmd::swap: vm.swap_value();break;
 			case Cmd::swap_1: vm.swap_value(load_int1());break;
@@ -194,7 +197,6 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::push_true: vm.push_value(true);break;
 			case Cmd::push_null: vm.push_value(nullptr);break;
 			case Cmd::push_zero_int: vm.push_value(0);break;
-			case Cmd::push_this: vm.push_value(vm.get_this());break;
 			case Cmd::push_undefined: vm.push_value(json::undefined);break;
 			case Cmd::op_unary_minus: unar_op(vm, op_unar_minus);break;
 			case Cmd::op_mkrange: bin_op(vm, op_mkrange);break;
@@ -345,7 +347,34 @@ void BlockExecution::mcall_fn(VirtualMachine &vm, Value method) {
 	Value obj = vm.pop_value();
 	Value m = obj[method.getString()];
 	vm.call_function_raw(m,obj);
+}
 
+void BlockExecution::vlist_pop(VirtualMachine &vm) {
+	ValueList p = vm.top_params();
+	vm.del_value();
+	auto sz = p.size();
+	if (sz==0) throw InvalidDereference("dereference of empty result");
+	auto vl = ValueListValue::create(sz-1);
+	for (std::size_t i = 1; i < sz;i++) {
+		vl->push_back(p[i].getHandle());
+	}
+	vm.push_value(json::PValue::staticCast(vl));
+	vm.push_value(p[0]);
+}
+
+void BlockExecution::combine_results(VirtualMachine &vm) {
+	ValueList p2 = vm.top_params();
+	vm.del_value();
+	ValueList p1 = vm.top_params();
+	vm.del_value();
+	auto vl = ValueListValue::create(p2.size()+p1.size());
+	for (Value x: p2) {
+		vl->push_back(x.getHandle());
+	}
+	for (Value x: p1) {
+		vl->push_back(x.getHandle());
+	}
+	vm.push_value(json::PValue::staticCast(vl));
 }
 
 Value BlockExecution::do_deref(const Value where, const Value &what) {

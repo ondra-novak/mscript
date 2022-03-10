@@ -21,7 +21,11 @@ Value Scope::convertToObject() const {
 	for (const auto &x: items) {
 		obj.set(x.first, x.second);
 	}
-	return obj;
+	if (isFunction(base)) {
+		return repackFunction(base, obj);
+	} else {
+		return obj;
+	}
 }
 
 void VirtualMachine::setGlobalScope(Value globalScope) {
@@ -245,10 +249,10 @@ std::optional<CodeLocation> VirtualMachine::getCodeLocation() const {
 }
 
 void VirtualMachine::swap_value() {
-	Value x = pop_value();
-	Value y = pop_value();
-	push_value(y);
-	push_value(x);
+	if (1 >= calcStack.size()) {
+		throw std::runtime_error("swap_value argument out of range");
+	}
+	std::swap(calcStack.back(), calcStack[calcStack.size()-2]);
 }
 
 void VirtualMachine::swap_value(std::size_t idx) {

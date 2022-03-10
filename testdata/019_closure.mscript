@@ -1,0 +1,12 @@
+fn = object ()=>{
+		(object closure {
+			A=A+1
+		},A)
+} {
+	A=0
+}
+
+for (I:1..10,fn=fn) {
+	(fn,r) = fn()
+	print (r)
+}

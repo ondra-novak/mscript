@@ -1,0 +1,16 @@
+object {
+	A="error"
+	obj=object {
+		A=42
+		fn=(X)=>{
+			A+X
+		}
+	}
+	B=obj.fn(10)
+	
+	B_error=obj["fn"](10)	
+	
+	C=with obj {
+		this["fn"](10)
+	}
+}	

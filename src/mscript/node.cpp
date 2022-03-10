@@ -151,9 +151,22 @@ void ExecNode::generateExpression(BlockBld &blk) const {
 
 KwWithNode::KwWithNode(PNode &&nd_object, PNode &&nd_block):ExecNode(std::move(nd_block)),nd_object(std::move(nd_object)) {}
 
+void KwWithNode::pushScope(BlockBld &blk) const {
+	VarSet vs;
+	nd_block->generateListVars(vs);
+	if (vs.find("this") != vs.end()) {
+		blk.pushCmd(Cmd::dup);
+		blk.pushCmd(Cmd::push_scope_object);
+		blk.pushInt(blk.pushConst("this"), Cmd::set_var_1, 2);
+	} else {
+		blk.pushCmd(Cmd::push_scope_object);
+
+	}
+}
+
 void KwWithNode::generateExpression(BlockBld &blk) const {
 	nd_object->generateExpression(blk);
-	blk.pushCmd(Cmd::push_scope_object);
+	pushScope(blk);
 	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::pop_scope);
 }
@@ -167,7 +180,7 @@ void KwExecNode::generateExpression(BlockBld &blk) const {
 
 void KwExecObjectNode::generateExpression(BlockBld &blk) const {
 	nd_object->generateExpression(blk);  //<block> <object>
-	blk.pushCmd(Cmd::push_scope_object); //<block>    -> object to scope
+	pushScope(blk);
 	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::del);			     //discard return value
 	blk.pushCmd(Cmd::scope_to_object);	 //convert scope to object <return value is object>
@@ -211,10 +224,35 @@ MethodCallNode::MethodCallNode(PNode &&left, Value identifier, PValueListNode &&
 :left(std::move(left)),identifier(identifier),pp(std::move(pp)) {}
 
 
+bool MethodCallNode::canReturnValueList(const PNode &nd) const {
+	return (dynamic_cast<const MethodCallNode *>(nd.get())
+			|| dynamic_cast<const FunctionCall *>(nd.get())
+			|| dynamic_cast<const KwExecNode *>(nd.get())
+			|| (dynamic_cast<const KwWithNode *>(nd.get()) && !dynamic_cast<const KwExecObjectNode *>(nd.get()))
+			|| dynamic_cast<const IfElseNode *>(nd.get())
+			|| dynamic_cast<const WhileLoopNode *>(nd.get())
+			|| dynamic_cast<const ForLoopNode *>(nd.get())
+			|| dynamic_cast<const ForLoopNode *>(nd.get())
+			|| ((dynamic_cast<const ValueNode *>(nd.get())) && (dynamic_cast<const ValueNode *>(nd.get())->getValue().flags() & paramPackValue))
+			|| dynamic_cast<const SwitchCaseNode *>(nd.get())
+			|| dynamic_cast<const BooleanAndOrNode *>(nd.get())
+			);
+
+}
+
 void MethodCallNode::generateExpression(BlockBld &blk) const {
-	pp->generateExpression(blk);					//<params>
-	left->generateExpression(blk);					//<params> <object>
-	blk.pushInt(blk.pushConst(identifier), Cmd::mcall_1,2);
+	left->generateExpression(blk);					//<object>
+	if (canReturnValueList(left)) {						//source of object can return value list - generate longer code
+		blk.pushCmd(Cmd::vlist_pop);					//<value list> <object>
+		pp->generateExpression(blk);					//<value list> <object> <params>
+		blk.pushCmd(Cmd::swap);							//<value list> <params> <object>
+		blk.pushInt(blk.pushConst(identifier), Cmd::mcall_1,2); //<value list> <result>
+		blk.pushCmd(Cmd::combine);						//<result>
+	} else {
+		pp->generateExpression(blk);					//<object> <params>
+		blk.pushCmd(Cmd::swap);							//<params> <object>
+		blk.pushInt(blk.pushConst(identifier), Cmd::mcall_1,2);
+	}
 }
 
 //Task handles executing a function - pushes argument to scope
@@ -248,6 +286,9 @@ public:
 			vm.set_var(identifiers.back(),args.toValue().slice(identifiers.size()-1));
 		}
 		vm.del_value();
+		if (object.defined()) vm.set_var("this", object);
+		if (closure.defined()) vm.set_var("closure", closure);
+
 		return BlockExecution::init(vm);
 	}
 	///Only handles end of the function
@@ -722,6 +763,10 @@ void InputLineMapNode::generateExpression(BlockBld &blk) const {
 
 void InputLineMapNode::generateListVars(VarSet &vars) const {
 	nx->generateListVars(vars);
+}
+
+void BlockValueNode::generateListVars(VarSet &vars) const {
+	blockTree->generateListVars(vars);
 }
 
 }

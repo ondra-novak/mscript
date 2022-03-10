@@ -34,6 +34,8 @@ enum class Cmd:std::uint8_t{
 	dup,			   ///<duplicate item on stack
 	del,				///<del item on stack
 	dup_1,			   ///<duplicate nth-item on stack
+	vlist_pop,			///<separate last value in value list to separate value. If last value is not value list, does nothing
+	combine,			///<combine two results into value list. Joins two value lists
 	swap,				///<swap top most items
 	swap_1,				///<swap top most items with nth-item on stack
 	get_var_1,			///<push value from variable, name of variable is in consts 1 byte index
@@ -57,7 +59,6 @@ enum class Cmd:std::uint8_t{
 	push_false,			///<push false value
 	push_null,			///<push null
 	push_undefined,		///<push undefined
-	push_this,			///<push this value
 	push_zero_int,		///<push integer zero
 	push_array_1,		///<push array (argument count items)
 	push_array_2,		///<push array (argument count items)
@@ -217,6 +218,9 @@ protected:
 	void do_push_array(VirtualMachine &vm, std::intptr_t count);
 
 	void do_isdef(VirtualMachine &vm, std::intptr_t idx);
+
+	void vlist_pop(VirtualMachine &vm);
+	void combine_results(VirtualMachine &vm);
 
 	static Value op_add(const Value &a, const Value &b);
 	static Value op_sub(const Value &a, const Value &b);

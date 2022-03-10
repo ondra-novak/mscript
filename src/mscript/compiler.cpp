@@ -145,7 +145,6 @@ PNode Compiler::compileValue() {
 			checkBeginBlock();
 			PNode blk = compileValue();
 			out = std::make_unique<KwWithNode>(std::move(obj), std::move(blk));
-			out = std::move(out);
 		}
 		break;
 	case Symbol::kw_object: {
@@ -158,7 +157,6 @@ PNode Compiler::compileValue() {
 			} else {
 				out = std::make_unique<KwExecNewObjectNode>(std::move(x));
 			}
-			out = std::move(out);
 		}
 		break;
 	case Symbol::kw_if:
@@ -211,10 +209,6 @@ PNode Compiler::compileValue() {
 		commit();
 		sync(Symbol::s_left_bracket);
 		out = compileWhile();
-		break;
-	case Symbol::kw_this:
-		commit();
-		out = std::make_unique<ThisNode>();
 		break;
 	case Symbol::kw_switch:
 		commit();
@@ -450,59 +444,52 @@ PNode Compiler::compileCommand() {
 
 }
 
-
-Compiler::ValueListAssign Compiler::parseValueListAssign() {
-	Compiler::ValueListAssign ret;
-	ret.valid = false;
+PNode Compiler::tryCompileAssgn() {
 	auto s = next();
 	if (s.symbol==Symbol::identifier) {
 		commit();
-		ret.single = s.data;
+		if (next().symbol==Symbol::s_equal || next().symbol==Symbol::s_qequal) {
+			return std::make_unique<SimpleAssignNode>(s.data);
+		}else{
+			return nullptr;
+		}
 	} else if (s.symbol ==Symbol::s_left_bracket){
+        std::vector<Value> idents;
         do {
         	commit();
         	s = next();
         	if (s.symbol==Symbol::identifier) {
-        		ret.list.push_back(s.data);
+        		idents.push_back(s.data);
         		commit();
         	} else if (s.symbol == Symbol::s_minus) {
         		commit();
-        		ret.list.push_back(nullptr);
+        		idents.push_back(nullptr);
         	} else {
-        		return ret;
+        		return nullptr;
         	}
         	s = next();
         } while (s.symbol==Symbol::s_comma);
+        Value expand;;
         if (s.symbol == Symbol::s_threedots) {
-        	ret.expand = ret.list.back();
-        	ret.list.pop_back();
+        	expand = idents.back();
+        	idents.pop_back();
         	commit();
         }
-        if (s.symbol != Symbol::s_right_bracket) {
-        	return ret;
+        if (s.symbol ==Symbol::s_right_bracket){
+        	commit();
+    		if (next().symbol==Symbol::s_equal) {
+    			return std::make_unique<PackAssignNode>(std::move(idents), expand);
+    		}else{
+    			return nullptr;
+    		}
+
+        } else {
+        	return nullptr;
         }
-        commit();
-	} else {
-		return ret;
-	}
-	ret.valid = true;
-	return ret;
-}
+	} else  {
+    	return nullptr;
+    }
 
-
-PNode Compiler::tryCompileAssgn() {
-	auto vldef = parseValueListAssign();
-	if (vldef.valid) {
-		auto s = next();
-		if (s.symbol == Symbol::s_equal || s.symbol == Symbol::s_qequal) {
-			if (vldef.single.defined()) {
-				return std::make_unique<SimpleAssignNode>(vldef.single);
-			} else {
-				return std::make_unique<PackAssignNode>(std::move(vldef.list),vldef.expand);
-			}
-		}
-	}
-	return nullptr;
 }
 
 

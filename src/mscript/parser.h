@@ -65,7 +65,6 @@ enum class Symbol {
 	kw_not,
 	kw_while,
 	kw_for,
-	kw_this,
 	kw_switch,
 	kw_constexpr,
 	eof,

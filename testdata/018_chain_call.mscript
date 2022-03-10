@@ -1,0 +1,12 @@
+obj ?= object {
+	A=0
+	next=()=>{
+		(object this {
+			A=A+1
+		},A)
+	}
+}
+
+
+obj.next().next().next().next().next()
+

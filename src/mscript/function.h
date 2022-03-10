@@ -38,16 +38,22 @@ public:
 };
 
 
-static inline Value packToValue(std::unique_ptr<AbstractFunction> &&fn, Value content) {
+static inline Value packToValue(std::shared_ptr<AbstractFunction> &&fn, Value content) {
 	return json::makeValue(std::move(fn), content);
 }
 
 static inline bool isFunction(const Value &val) {
-	return isNativeType(val, typeid(std::unique_ptr<AbstractFunction>));
+	return isNativeType(val, typeid(std::shared_ptr<AbstractFunction>));
+}
+
+static inline Value repackFunction(const Value &fnObj, const Value &newClosure) {
+	const auto &r =json::cast<std::shared_ptr<AbstractFunction> >(fnObj);
+	return packToValue(std::shared_ptr<AbstractFunction>(r), newClosure);
+
 }
 
 static inline const AbstractFunction &getFunction(const Value &v) {
-	const auto &r =json::cast<std::unique_ptr<AbstractFunction> >(v);
+	const auto &r =json::cast<std::shared_ptr<AbstractFunction> >(v);
 	return *r;
 }
 
@@ -62,10 +68,10 @@ static inline Value defineFunction(Fn &&fn) {
 	protected:
 		Fn fn;
 	};
-	auto ptr = std::make_unique<FnClass>(std::forward<Fn>(fn));
+	auto ptr = std::make_shared<FnClass>(std::forward<Fn>(fn));
 	auto rawptr = ptr.get();
 	std::string name = "Native fn "+std::to_string(*reinterpret_cast<const std::uintptr_t *>(&rawptr));
-	return packToValue(std::unique_ptr<AbstractFunction>(std::move(ptr)), name);
+	return packToValue(std::shared_ptr<AbstractFunction>(std::move(ptr)), name);
 }
 
 template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<ValueList>()))>

@@ -87,14 +87,6 @@ protected:
 	Value expressionToConst();
 	PNode compileNumber();
 
-	struct ValueListAssign {
-		bool valid;
-		Value single;
-		std::vector<Value> list;
-		Value expand;
-	};
-
-	ValueListAssign parseValueListAssign();
 };
 
 
