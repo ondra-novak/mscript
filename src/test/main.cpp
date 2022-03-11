@@ -208,7 +208,23 @@ static int run(CmdArgIter &iter, bool debug) {
 				std::cout << std::endl;
 				std::cout << "Calc stack: ";
 				for (const auto &x: vm.getCalcStack()) {
-					printValue(x);
+					if (isFunction(x)) {
+						auto k = x.getKey();
+						if (k.empty()) {
+							printValue(x);
+						} else {
+							std::cout << k << "()";
+						}
+					} else if (isBlock(x)) {
+						auto k = x.getKey();
+						if (k.empty()) {
+							printValue(x);
+						} else {
+							std::cout << k << "{...}";
+						}
+					} else {
+						printValue(x);
+					}
 					std::cout <<  "|";
 				}
 				std::cout << std::endl;
@@ -223,6 +239,8 @@ static int run(CmdArgIter &iter, bool debug) {
 			}
 
 		} while (vm.run());
+		auto e = vm.get_exception();
+		if (e) std::rethrow_exception(e);
 		v = vm.pop_value();
 		vm.pop_scope();
 		vm.pop_scope();

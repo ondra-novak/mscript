@@ -157,7 +157,7 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::call: vm.call_function_raw(vm.pop_value(),Value());break;
 			case Cmd::call_1: vm.call_function_raw(pickVar(vm, load_int1()),Value());break;
 			case Cmd::call_2: vm.call_function_raw(pickVar(vm, load_int2()),Value());break;
-			case Cmd::mcall: mcall_fn(vm,vm.pop_value());break;
+			case Cmd::mcall: {Value fnval=vm.pop_value();vm.call_function_raw(fnval,vm.pop_value());};break;
 			case Cmd::mcall_1: mcall_fn(vm,block.consts[load_int1()]);break;
 			case Cmd::mcall_2: mcall_fn(vm,block.consts[load_int2()]);break;
 			case Cmd::exec_block: exec_block(vm);break;
@@ -369,7 +369,7 @@ Value BlockExecution::op_checkbound(const Value &a, const Value &b) {
 
 void BlockExecution::mcall_fn(VirtualMachine &vm, Value method) {
 	Value obj = vm.pop_value();
-	Value m = obj[method.getString()];
+	Value m = deref(vm, obj, method);
 	vm.call_function_raw(m,obj);
 }
 

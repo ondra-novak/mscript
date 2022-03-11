@@ -69,9 +69,7 @@ static inline Value defineFunction(Fn &&fn) {
 		Fn fn;
 	};
 	auto ptr = std::make_shared<FnClass>(std::forward<Fn>(fn));
-	auto rawptr = ptr.get();
-	std::string name = "Native fn "+std::to_string(*reinterpret_cast<const std::uintptr_t *>(&rawptr));
-	return packToValue(std::shared_ptr<AbstractFunction>(std::move(ptr)), name);
+	return packToValue(std::shared_ptr<AbstractFunction>(std::move(ptr)), {"@FN","native"});
 }
 
 template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<ValueList>()))>

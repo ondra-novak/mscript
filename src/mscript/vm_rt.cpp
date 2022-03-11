@@ -98,9 +98,12 @@ static Value rt = json::Object {
 		{"trunc",defineSimpleFn([](ValueList params){return std::trunc(params[0].getNumber());})},
 	}},
 	{"Array",json::Object {
-		{"push_back",defineSimpleMethod([](Value obj, ValueList params){return arrayPushBack(obj, params[0]);})},
+		{"push_back",defineSimpleMethod([](Value obj, ValueList params){for (Value z: params) {obj = arrayPushBack(obj, z);} return obj;})},
 		{"pop_back",defineSimpleMethod([](Value obj, ValueList params){return arrayPopBack(obj);})},
+		{"push_front",defineSimpleMethod([](Value obj, ValueList params){for (Value z: params) {obj = arrayPushFront(obj, z);} return obj;})},
+		{"pop_front",defineSimpleMethod([](Value obj, ValueList params){return arrayPopFront(obj);})},
 		{"back",defineSimpleMethod([](Value obj, ValueList params){return obj.empty()?Value():obj[obj.size()-1];})},
+		{"front",defineSimpleMethod([](Value obj, ValueList params){return obj.empty()?Value():obj[0];})},
 		{"size",defineSimpleMethod([](Value obj, ValueList params){
 			return obj.size();
 		})},

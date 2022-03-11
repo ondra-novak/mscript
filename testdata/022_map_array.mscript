@@ -1,0 +1,6 @@
+A?=1..100
+printnl("A=   ",A)
+B=for (I:A,res=[]) {res=res.push_back(I*I)}
+printnl("A^2= ",B)
+C=for (I:A,res=[]) {res=res.push_front(I*I,I*I+1)}
+printnl("test=",C)

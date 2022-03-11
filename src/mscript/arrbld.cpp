@@ -25,40 +25,64 @@ json::PValue ArrBldNode::itemAtIndex(std::size_t index) const {
 	else return right->itemAtIndex(index-lsize);
 }
 
-json::RefCntPtr<ArrBldNode> ArrBldNode::push_back(json::PValue x) const {
+json::PValue ArrBldNode::collapse() const {
+	auto arr = json::ArrayValue::create(lsize + rsize);
+	for (std::size_t i = 0; i < lsize; i++) {
+		arr->push_back(left->itemAtIndex(i));
+	}
+	for (std::size_t i = 0; i < rsize; i++) {
+		arr->push_back(right->itemAtIndex(i));
+	}
+	return json::PValue::staticCast(arr);
+}
+
+json::PValue ArrBldNode::oneItemArray(json::PValue nd){
+	auto arr2 = json::ArrayValue::create(1);
+	arr2->push_back(nd);
+	return json::PValue::staticCast(arr2);
+}
+
+json::PValue ArrBldNode::create(json::PValue left, json::PValue right) {
+	return json::PValue(new ArrBldNode(left,right));
+}
+
+json::PValue ArrBldNode::push_back(json::PValue x) const {
 	json::PValue nl,nr;
 	if (lsize==rsize) {
-		auto arr = json::ArrayValue::create(lsize+rsize);
-		for (std::size_t i = 0; i < lsize; i++) {
-			arr->push_back(left->itemAtIndex(i));
-		}
-		for (std::size_t i = 0; i < rsize; i++) {
-			arr->push_back(right->itemAtIndex(i));
-		}
-		nl = json::PValue::staticCast(arr);
-		auto arr2 = json::ArrayValue::create(1);
-		arr2->push_back(x);
-		nr = json::PValue::staticCast(arr2);
+		nl = collapse();
+		nr = oneItemArray(x);
 	} else {
 		nl = left;
 		if (rsize == 1) {
-			auto arr2 = json::ArrayValue::create(1);
-			arr2->push_back(x);
-			json::RefCntPtr<ArrBldNode> arr = new ArrBldNode(right, json::PValue::staticCast(arr2));
-			nr = json::PValue::staticCast(arr);
+			nr = create(right, oneItemArray(x));
 		} else {
-			auto arr = static_cast<const ArrBldNode *>(static_cast<const json::IValue *>(right))->push_back(x);
-			nr = json::PValue::staticCast(arr);
+			nr = static_cast<const ArrBldNode *>(static_cast<const json::IValue *>(right))->push_back(x);
 		}
 	}
-	return new ArrBldNode(nl,nr);
+	return create(nl,nr);
 }
 
-ArrTruncate::ArrTruncate(json::PValue src, std::size_t newsz):src(src),newsz(newsz) {
+json::PValue ArrBldNode::push_front(json::PValue x) const {
+	json::PValue nl,nr;
+	if (lsize==rsize) {
+		nl = oneItemArray(x);
+		nr = collapse();
+	} else {
+		nr = right;
+		if (lsize == 1) {
+			nl = create(oneItemArray(x),left);
+		} else {
+			nl = static_cast<const ArrBldNode *>(static_cast<const json::IValue *>(left))->push_front(x);
+		}
+	}
+	return create(nl,nr);
+}
+
+ArrTruncate::ArrTruncate(json::PValue src, std::size_t offset, std::size_t newsz):src(src),offs(offset),newsz(newsz) {
 }
 
 json::PValue ArrTruncate::itemAtIndex(std::size_t index) const {
-	return src->itemAtIndex(index);
+	return src->itemAtIndex(index+offs);
 }
 
 std::size_t ArrTruncate::size() const {
@@ -68,13 +92,22 @@ std::size_t ArrTruncate::size() const {
 Value arrayPushBack(Value arr, Value item) {
 	auto bld = dynamic_cast<const ArrBldNode *>(arr.getHandle()->unproxy());
 	if (bld) {
-		auto ret = bld->push_back(item.getHandle());
-		return Value(json::PValue::staticCast(ret));
+		return  bld->push_back(item.getHandle());
 	} else if (arr.empty()) {
-		return Value(json::array,{item},false);
+		return ArrBldNode::oneItemArray(item.getHandle());
 	} else {
-		json::PValue ret = new ArrBldNode(arr.getHandle(),Value(json::array,{item}).getHandle());
-		return ret;
+		return ArrBldNode::create(arr.getHandle(), ArrBldNode::oneItemArray(item.getHandle()));
+	}
+}
+
+Value arrayPushFront(Value arr, Value item) {
+	auto bld = dynamic_cast<const ArrBldNode *>(arr.getHandle()->unproxy());
+	if (bld) {
+		return bld->push_front(item.getHandle());
+	} else if (arr.empty()) {
+		return ArrBldNode::oneItemArray(item.getHandle());
+	} else {
+		return ArrBldNode::create(ArrBldNode::oneItemArray(item.getHandle()), arr.getHandle());
 	}
 }
 
@@ -85,13 +118,31 @@ Value arrayPopBack(Value arr) {
 		if (trn->size()*2 < trn->getSrc()->size()) {
 			return arr.slice(0,-1);
 		} else {
-			json::PValue ret = new ArrTruncate(trn->getSrc(), trn->size()-1);
+			json::PValue ret = new ArrTruncate(trn->getSrc(), 0, trn->size()-1);
 			return Value(ret);
 		}
 	} else {
-		json::PValue ret = new ArrTruncate(arr.getHandle()->unproxy(), arr.size()-1);
+		json::PValue ret = new ArrTruncate(arr.getHandle()->unproxy(), 0, arr.size()-1);
 		return Value(ret);
 	}
 }
+
+Value arrayPopFront(Value arr) {
+	if (arr.size()<2) return Value(json::array);
+	auto trn = dynamic_cast<const ArrTruncate *>(arr.getHandle()->unproxy());
+	if (trn) {
+		if (trn->size()*2 < trn->getSrc()->size()) {
+			return arr.slice(1);
+		} else {
+			json::PValue ret = new ArrTruncate(trn->getSrc(),trn->getOffset()+1, trn->size()-1);
+			return Value(ret);
+		}
+	} else {
+		json::PValue ret = new ArrTruncate(arr.getHandle()->unproxy(), 1, arr.size()-1);
+		return Value(ret);
+	}
+}
+
+
 
 }
