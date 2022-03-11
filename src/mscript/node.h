@@ -325,11 +325,11 @@ namespace mscript {
 		MethodCallNode(PNode &&left, Value identifier, PValueListNode &&pp);
 		virtual void generateExpression(BlockBld &blk) const override;
 		virtual void generateListVars(VarSet &vars) const override;
+		static bool canReturnValueList(const PNode &nd) ;
 	protected:
 		PNode left;
 		Value identifier;
 		PValueListNode pp;
-		bool canReturnValueList(const PNode &nd) const;
 	};
 
 
@@ -466,6 +466,17 @@ namespace mscript {
 		PNode right;
 	};
 
+	class CastMethodCallNode: public Expression {
+	public:
+		CastMethodCallNode(PNode &&expr, PNode &&baseObj, std::vector<Value> &&path, PValueListNode &&vlist);
+		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
+	protected:
+		std::vector<Value> path;
+		PNode expr;
+		PNode baseObj;
+		PValueListNode vlist;
+	};
 }
 
 

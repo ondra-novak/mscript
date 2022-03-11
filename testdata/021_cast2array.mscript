@@ -1,0 +1,5 @@
+A?=object { # declare object
+	X=1
+	Y=false
+}
+A->Array.size()  # cast object to an Array and call method size() 

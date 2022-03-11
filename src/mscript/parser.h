@@ -50,7 +50,8 @@ enum class Symbol {
 	s_amp, //@
 	s_qequal, // ?=
 	s_dblq, // ??
-	kw_exec,		//exec {... block ...}
+	s_cast, // ->    x->Object.method
+  	kw_exec,		//exec {... block ...}
 	kw_with,        //with A {.... block ....}
 	kw_object,		//object {.... block ....}, object A {.... block ....}
 	kw_return,      //return A - exit block
@@ -120,7 +121,10 @@ public:
 				case '*': return {Symbol::s_star};
 				case '/': return {Symbol::s_slash};
 				case '+': return {Symbol::s_plus};
-				case '-': return {Symbol::s_minus};
+				case '-': switch(this->rd.next()) {
+					case '>': this->rd.commit(); return {Symbol::s_cast};
+					default: return {Symbol::s_minus};
+				};
 				case '@': return {Symbol::s_amp};
 				case '$': return {Symbol::s_dollar};
 				case '>': switch (this->rd.next()) {

@@ -38,6 +38,16 @@ public:
 
 	PNode compile();
 
+	///Parses include file
+	/**
+	 * @param name name of include file
+	 * @param loc location object, must be filled
+	 * @param code parsed code, must be filled
+	 * @retval true success, include resolved
+	 * @retval false include cannot be resolved
+	 */
+	virtual bool onInclude(std::string_view name, CodeLocation &loc, std::vector<Element> &code) {return false;}
+
 
 protected:
 	const std::vector<Element> &code;
@@ -87,6 +97,7 @@ protected:
 	PNode compileSwitch();
 	Value expressionToConst();
 	PNode compileNumber();
+	PNode compileCast(PNode &&expr, PNode &&baseObj);
 
 };
 

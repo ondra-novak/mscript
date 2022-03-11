@@ -224,7 +224,7 @@ MethodCallNode::MethodCallNode(PNode &&left, Value identifier, PValueListNode &&
 :left(std::move(left)),identifier(identifier),pp(std::move(pp)) {}
 
 
-bool MethodCallNode::canReturnValueList(const PNode &nd) const {
+bool MethodCallNode::canReturnValueList(const PNode &nd) {
 	return (dynamic_cast<const MethodCallNode *>(nd.get())
 			|| dynamic_cast<const FunctionCall *>(nd.get())
 			|| dynamic_cast<const KwExecNode *>(nd.get())
@@ -786,6 +786,30 @@ void CustomOperatorNode::generateExpression(BlockBld &blk) const {
 void CustomOperatorNode::generateListVars(VarSet &vars) const {
 	left->generateListVars(vars);
 	right->generateListVars(vars);
+}
+
+void CastMethodCallNode::generateExpression(BlockBld &blk) const {
+	expr->generateExpression(blk);					//<object>
+	bool vl = MethodCallNode::canReturnValueList(expr);
+	if (vl) blk.pushCmd(Cmd::vlist_pop);
+	vlist->generateExpression(blk);					//<object><parameters>
+	blk.pushCmd(Cmd::swap);							//<parameters><object>
+	baseObj->generateExpression(blk);				//<parameters><object><baseObject>
+	for (Value x: path) {
+		blk.pushInt(blk.pushConst(x), Cmd::push_const_1,2);
+		blk.pushCmd(Cmd::deref);
+	}
+	//<parameters><object><function>
+	blk.pushCmd(Cmd::mcall);
+	if (vl) blk.pushCmd(Cmd::combine);
+}
+
+CastMethodCallNode::CastMethodCallNode(PNode &&expr, PNode &&baseObj, std::vector<Value> &&path, PValueListNode &&vlist)
+	:path(std::move(path)),expr(std::move(expr)),baseObj(std::move(baseObj)),vlist(std::move(vlist)) {}
+
+
+void CastMethodCallNode::generateListVars(VarSet &vars) const {
+	vars.insert(Value(nullptr));
 }
 
 }

@@ -46,6 +46,7 @@ enum class Cmd:std::uint8_t{
 	call,				///<call function, requires <arguments as list><function>
 	call_1,				///<call function, requires <arguments as list><function>
 	call_2,				///<call function, requires <arguments as list><function>
+	mcall,				///<call method, requires <arguments as list><object><function>
 	mcall_1,			///<call method, requires <arguments as list><object> - argument is fn-name
 	mcall_2,			///<call method, requires <arguments as list><object> - argument is fn-name
 	exec_block,			///<execute block, requires <block> -> returns result
@@ -195,6 +196,7 @@ protected:
 	void getVar(VirtualMachine &vm, std::intptr_t idx);
 	Value pickVar(VirtualMachine &vm, std::intptr_t idx);
 	void deref(VirtualMachine &vm, Value idx);
+	json::Value deref(VirtualMachine &vm, Value src, Value idx);
 	void call_fn(VirtualMachine &vm);
 	void mcall_fn(VirtualMachine &vm, Value method);
 	void exec_block(VirtualMachine &vm);
@@ -237,7 +239,7 @@ protected:
 
 
 
-	static Value do_deref(const Value where, const Value &what);
+//	static Value do_deref(const Value where, const Value &what);
 
 
 };

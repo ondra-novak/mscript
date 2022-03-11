@@ -96,6 +96,15 @@ PNode Compiler::handleValueSuffixes(PNode expr) {
 		}
 		throw compileError("Expected identifier after '.' ");
 		break;
+	case Symbol::s_cast:
+		commit();
+		s = next();
+		if (s.symbol == Symbol::s_left_bracket) {
+			return compileCast(std::move(expr),compileValue());
+		} else if (s.symbol == Symbol::identifier) {
+			commit();
+			return compileCast(std::move(expr),std::make_unique<Identifier>(s.data));
+		} else throw compileError("Only identifier or brackets can follow the cast operator '->': X->Y, X->(Y)");
 	default:
 		return expr;
 	}
@@ -862,6 +871,20 @@ PNode Compiler::compileNumber() {
 	return std::make_unique<NumberNode>(res);
 }
 
+PNode Compiler::compileCast(PNode &&expr, PNode &&baseObj) {
+	auto s = next();
+	std::vector<Value> path;
+	while (s.symbol == Symbol::s_dot) {
+		commit();
+		s = next();
+		sync(Symbol::identifier);
+		path.push_back(s.data);
+		s = next();
+	}
+	sync(Symbol::s_left_bracket);
+	auto params = compileValueList();
+	return std::make_unique<CastMethodCallNode>(std::move(expr), std::move(baseObj), std::move(path), std::move(params));
+}
 
 }
 

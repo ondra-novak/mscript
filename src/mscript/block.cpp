@@ -157,6 +157,7 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::call: vm.call_function_raw(vm.pop_value(),Value());break;
 			case Cmd::call_1: vm.call_function_raw(pickVar(vm, load_int1()),Value());break;
 			case Cmd::call_2: vm.call_function_raw(pickVar(vm, load_int2()),Value());break;
+			case Cmd::mcall: mcall_fn(vm,vm.pop_value());break;
 			case Cmd::mcall_1: mcall_fn(vm,block.consts[load_int1()]);break;
 			case Cmd::mcall_2: mcall_fn(vm,block.consts[load_int2()]);break;
 			case Cmd::exec_block: exec_block(vm);break;
@@ -307,10 +308,33 @@ Value BlockExecution::pickVar(VirtualMachine &vm, std::intptr_t idx) {
 
 }
 
+json::Value BlockExecution::deref(VirtualMachine &vm, Value src, Value idx) {
+	switch (idx.type()) {
+	case json::number: return src[idx.getUInt()];
+	case json::array: return newIndexMap(src, idx);
+	case json::string: {
+		if (src.type() == json::object) {
+			Value r = src[idx.getString()];
+			if (r.defined()) return r;
+			Value clsItem = src[""];
+			if (clsItem.type() != json::object) {
+				if (!vm.get_var(strTypeClasses[src.type()], clsItem)) return json::undefined;
+			}
+			return clsItem[idx.getString()];
+		} else {
+			Value clsItem;
+			if (!vm.get_var(strTypeClasses[src.type()], clsItem)) return json::undefined;
+			return clsItem[idx.getString()];
+		}
+	}
+	default: throw InvalidDereference(idx);
+	}
+}
+
 void BlockExecution::deref(VirtualMachine &vm, Value idx) {
 	try {
 		Value z = vm.pop_value();
-		vm.push_value(do_deref(z, idx));
+		vm.push_value(deref(vm, z, idx));
 	} catch (...) {
 		vm.raise(std::current_exception());
 	}
@@ -376,15 +400,23 @@ void BlockExecution::combine_results(VirtualMachine &vm) {
 	}
 	vm.push_value(json::PValue::staticCast(vl));
 }
-
+/*
 Value BlockExecution::do_deref(const Value where, const Value &what) {
 	switch (what.type()) {
 		case json::number: return  where[what.getUInt()];break;
-		case json::string: return  where[what.getString()];break;
+		case json::string:
+			if (where.type() != json::object) {
+				auto tname = strTypeClasses[where.type()];
+				if (vm.get)
+
+			}
+
+			return  where[what.getString()];break;
 		default: throw InvalidDereference(what);
 	}
 
 }
+*/
 
 void BlockExecution::call_fn(VirtualMachine &vm) {
 	Value fn = vm.pop_value();

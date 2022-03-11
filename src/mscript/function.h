@@ -85,6 +85,17 @@ static inline Value defineSimpleFn(Fn &&fn) {
 	});
 }
 
+template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<Value>(),std::declval<ValueList>()))>
+static inline Value defineSimpleMethod(Fn &&fn) {
+	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value obj, Value){
+		auto params = vm.top_params();
+		Value ret = fn(obj, params);
+		vm.del_value();
+		vm.push_value(ret);
+		return nullptr;
+	});
+}
+
 }
 
 

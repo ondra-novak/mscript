@@ -37,6 +37,24 @@ Value newDynMap(Value v, Fn &&fn) {
 	return Value(new DynMap(v, std::forward<Fn>(fn)));
 }
 
+class IndexMap: public json::AbstractArrayValue {
+public:
+	IndexMap(json::Value v, Value index):v(v),index(index) {}
+	virtual json::RefCntPtr<const IValue> itemAtIndex(std::size_t index) const override {
+		auto pos = this->index[index].getUInt();
+		return v[pos].getHandle();
+	}
+	virtual std::size_t size() const override {
+		return index.size();
+	}
+protected:
+	json::Value v;
+	json::Value index;
+};
+
+inline Value newIndexMap(Value v, Value index) {
+	return Value(new IndexMap(v, index));
+}
 
 }
 #endif /* SRC_MSCRIPT_DYNMAP_H_ */

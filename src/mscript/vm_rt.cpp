@@ -9,122 +9,35 @@
 #include <cmath>
 #include <random>
 #include <imtjson/object.h>
+#include <mscript/arrbld.h>
+#include "vm.h"
 #include "block.h"
 #include "function.h"
 #include "vm_rt.h"
 
+using mscript::VirtualMachine;
+
 namespace mscript {
 
-class AbstractMapTask: public AbstractTask {
+
+class MapTask: public AbstractTask {
 public:
-	bool post_init(mscript::VirtualMachine &vm) {
-		if (!container.isContainer()) {
-			vm.raise(std::make_exception_ptr(std::runtime_error("The first argument of the function must be a container")));
-			return false;
-		}
-		if (!isFunction(fn)) {
-			vm.raise(std::make_exception_ptr(std::runtime_error("The second argument of the function must be a function")));
-			return false;
-		}
-		if (container.empty()) {
-			vm.pop_value();
-			vm.push_value(container);
-			return false;
-		}
-		if (init_block.defined()) {
-			if (!isBlock(init_block)) {
-				vm.raise(std::make_exception_ptr(std::runtime_error("The last argument of the function must be a block")));
-				return false;
-			}
-		} else {
-			init_block = nullptr;
-		}
-		max = container.size();
-		return true;
-	}
-	virtual bool init(mscript::VirtualMachine &vm) override {
-		auto args = vm.top_params();
-		container = args[0];
-		fn = args[1];
-		init_block = args[2];
-		vm.del_value();
-		return post_init(vm);
-	}
-	virtual void add_result(Value result) = 0;
-	virtual Value get_result() const = 0;
-	virtual void call_fn(mscript::VirtualMachine &vm) = 0;
-
-	virtual bool run(mscript::VirtualMachine &vm) override {
-		if (init_block.defined()) {
-			vm.push_scope(Value());
-			if (!init_block.isNull()) {
-				vm.push_task(std::make_unique<BlockExecution>(init_block));
-			}
-			init_block = Value();
-			return true;
-		}
-
-		Value prevScope = vm.scope_to_object();
-		vm.pop_scope();
-
-		if (index) {
-			add_result(vm.pop_value());
-			if (index >= max) {
-				vm.push_value(get_result());
-				return false;
-			}
-		} else {
-			vm.del_value();
-		}
-		vm.push_scope(prevScope);
-		call_fn(vm);
-		++index;
-		return true;
-	}
+		MapTask(Value object):src(object),idx(0) {}
+		virtual bool init(VirtualMachine &vm) override;
+		virtual bool run(VirtualMachine &vm) override;
 protected:
-	Value fn;
-	Value init_block;
-	Value container;
-	Value prevScope;
-	std::size_t index;
-	std::size_t max;
-	bool has_scope;
-};
-
-class MapTask: public AbstractMapTask {
-public:
-	virtual void add_result(Value result) override {r.push_back(result);}
-	virtual Value get_result() const override {return r;}
-	virtual void call_fn(mscript::VirtualMachine &vm) override {
-		vm.call_function(fn, container[index], index, container);
-	}
-	json::Array r;
-
-};
+		Value src;
+		Value fn;
+		std::size_t idx;
 
 
-class ReduceTask: public AbstractMapTask {
-public:
-	virtual bool init(mscript::VirtualMachine &vm) override {
-		auto args = vm.top_params();
-		container = args[0];
-		fn = args[1];
-		sum = args[2];
-		init_block = args[3];
-		vm.del_value();
-		return post_init(vm);
-	}
-	virtual void add_result(Value result) override {sum = result;}
-	virtual Value get_result() const override {return sum;}
-	virtual void call_fn(mscript::VirtualMachine &vm) override {
-		vm.call_function(fn, sum, container[index], index, container);
-	}
-protected:
-	Value sum;
 };
 
 
 Value getVirtualMachineRuntime() {
+
+
+
 
 static Value rt = json::Object {
 	{"Math",json::Object{
@@ -184,11 +97,30 @@ static Value rt = json::Object {
 		{"tan",defineSimpleFn([](ValueList params){return std::tan(params[0].getNumber());})},
 		{"trunc",defineSimpleFn([](ValueList params){return std::trunc(params[0].getNumber());})},
 	}},
+	{"Array",json::Object {
+		{"push_back",defineSimpleMethod([](Value obj, ValueList params){return arrayPushBack(obj, params[0]);})},
+		{"pop_back",defineSimpleMethod([](Value obj, ValueList params){return arrayPopBack(obj);})},
+		{"back",defineSimpleMethod([](Value obj, ValueList params){return obj.empty()?Value():obj[obj.size()-1];})},
+		{"size",defineSimpleMethod([](Value obj, ValueList params){
+			return obj.size();
+		})},
+		{"reverse",defineSimpleMethod([](Value obj, ValueList params){return obj.reverse();})},
+	}}
 
 };
 return rt;
 
 }
 
+/*
+
+inline bool MapTask::init(VirtualMachine &vm) {
+	fn = vm.pop_value();
+
 }
 
+inline bool MapTask::run(VirtualMachine &vm) {
+}
+*/
+
+}

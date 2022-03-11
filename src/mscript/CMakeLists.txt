@@ -10,6 +10,7 @@ add_library (mscript
 	compiler.cpp
 	parser.cpp
 	range.cpp
+	arrbld.cpp
 )
 
 
