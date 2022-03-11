@@ -1,0 +1,8 @@
+fn=object (x)=>{x*A} {A=10}
+arr=vtarray(100,fn)
+for (I:arr, sep="") {
+	print(sep,I)
+	sep=","
+}
+printnl()
+printnl(arr)

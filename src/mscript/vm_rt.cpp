@@ -10,6 +10,7 @@
 #include <random>
 #include <imtjson/object.h>
 #include <mscript/arrbld.h>
+#include <mscript/procarr.h>
 #include "vm.h"
 #include "block.h"
 #include "function.h"
@@ -108,7 +109,28 @@ static Value rt = json::Object {
 			return obj.size();
 		})},
 		{"reverse",defineSimpleMethod([](Value obj, ValueList params){return obj.reverse();})},
-	}}
+		{"indexOf",defineSimpleMethod([](Value obj, ValueList params){return obj.indexOf(params[0], params[1].getUInt());})},
+	}},
+	{"String",json::Object {
+
+	}},
+	{"__operator",json::Object{
+		{"in", defineSimpleFn([](ValueList lst){
+			auto str = lst[0].getString();
+			Value obj =lst[1];
+			return obj[str].defined();
+		})}
+	}},
+
+	{"vtarray", defineSimpleFn([](ValueList params){
+		Value fn = params[1];
+		Value size = params[0];
+		if (size.type() != json::number) throw std::runtime_error("vtarray - the second argument must be a number");
+		if (!isFunction(fn)) throw std::runtime_error("vtarray - the second argument must be a function");
+		return packProcArray(fn, size.getUInt());
+	})}
+
+
 
 };
 return rt;

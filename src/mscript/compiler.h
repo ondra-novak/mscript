@@ -15,28 +15,25 @@
 namespace mscript {
 
 
-
-
-///Compile code
-/**
- * @param code array of symbols, extracted from the text file, using parseScript()
- * @param vm virtual machine. It is used to optimize code when some parts can be evaluated during compilation.
- * You need to initialize the virtual machine with a global scope contains symbols which are available
- * during evaluation
- *
- * @note state of virtual machine is modified during compilation
- */
-
-Block compile(const std::vector<Element> &code, Value globalScope, const CodeLocation &loc);
-
-
 class Compiler {
 public:
 
-	Compiler(const std::vector<Element> &code, Value globalScope, const CodeLocation &loc)
-			:code(code), globalScope(globalScope), loc(loc) {}
+	Compiler(Value globalScope):globalScope(globalScope) {}
 
-	PNode compile();
+	///Compile code
+	/**
+	 * @param loc code location
+	 * @param fn function which return characters of text. It needs to return -1 for end of file
+	 * @return Value which contains block which can be executed using VirtualMachine
+	 */
+	template<typename Fn> Value compileText(const CodeLocation &loc, Fn &&fn);
+	///Compile code
+	/**
+	 * @param loc code location
+	 * @param str string to compile
+	 * @return Value which contains block which can be executed using VirtualMachine
+	 */
+	Value compileString(const CodeLocation &loc, const std::string_view &str);
 
 	///Parses include file
 	/**
@@ -50,7 +47,10 @@ public:
 
 
 protected:
-	const std::vector<Element> &code;
+	PNode compile(std::vector<Element> &&code, const CodeLocation &loc);
+
+
+	std::vector<Element> code;
 	Value globalScope;
 	//BlockBld &bld;
 	CodeLocation loc;
@@ -102,8 +102,15 @@ protected:
 };
 
 
+template<typename Fn>
+Value Compiler::compileText(const CodeLocation &loc, Fn &&fn) {
+	std::vector<Element> el;
+	parseScript(std::forward<Fn>(fn), el);
+	return packToValue(buildCode(compile(std::move(el),loc), loc));
+}
 
 
 }
+
 
 #endif /* SRC_MSCRIPT_COMPILER_H_ */

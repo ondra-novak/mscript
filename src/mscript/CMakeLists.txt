@@ -11,6 +11,7 @@ add_library (mscript
 	parser.cpp
 	range.cpp
 	arrbld.cpp
+	procarr.cpp
 )
 
 

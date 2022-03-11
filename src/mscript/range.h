@@ -7,6 +7,7 @@
 
 #ifndef SRC_MSCRIPT_RANGE_H_
 #define SRC_MSCRIPT_RANGE_H_
+#include <imtjson/value.h>
 #include <imtjson/basicValues.h>
 
 

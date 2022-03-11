@@ -56,7 +56,6 @@ Value arrayPushFront (Value arr, Value item);
 Value arrayPopFront (Value arr);
 
 
-
 }
 
 #endif /* SRC_MSCRIPT_ARRBLD_H_ */

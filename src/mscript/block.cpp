@@ -8,6 +8,7 @@
 #include <cmath>
 #include <imtjson/serializer.h>
 #include <imtjson/string.h>
+#include <mscript/procarr.h>
 #include "range.h"
 #include "block.h"
 #include "function.h"
@@ -334,7 +335,12 @@ json::Value BlockExecution::deref(VirtualMachine &vm, Value src, Value idx) {
 void BlockExecution::deref(VirtualMachine &vm, Value idx) {
 	try {
 		Value z = vm.pop_value();
-		vm.push_value(deref(vm, z, idx));
+		if (isProcArray(z)) {
+			const ProcArray &pa = getProcArray(z);
+			vm.call_function(pa.fn, Value(), idx);
+		} else {
+			vm.push_value(deref(vm, z, idx));
+		}
 	} catch (...) {
 		vm.raise(std::current_exception());
 	}

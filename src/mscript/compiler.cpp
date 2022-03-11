@@ -5,26 +5,21 @@
  *      Author: ondra
  */
 
+#include <imtjson/array.h>
 #include "compiler.h"
 #include <unordered_map>
+#include <unordered_set>
+
+using json::Array;
 
 namespace mscript {
 
 
 
 
-Block compile(const std::vector<Element> &code, Value globalScope, const CodeLocation &loc) {
-
-	Compiler cmp(code, globalScope, loc);
-
-	PNode tree = cmp.compile();
-
-	return buildCode(tree, loc);
-
-}
-
-
-PNode Compiler::compile() {
+PNode Compiler::compile(std::vector<Element> &&code, const CodeLocation &loc) {
+	this->code = std::move(code);
+	this->loc = loc;
 	curLine = 0;
 	lastLine = 0;
 	curSymbol = 0;
@@ -77,7 +72,7 @@ PNode Compiler::handleValueSuffixes(PNode expr) {
 		return handleValueSuffixes(std::make_unique<FunctionCall>(std::move(expr), compileValueList()));
 	case Symbol::s_left_square_bracket:
 		commit();
-		tmp = compileValue();
+		tmp = compileExpression();
 		sync(Symbol::s_right_square_bracket);
 		return handleValueSuffixes(std::make_unique<DerefernceNode>(std::move(expr), std::move(tmp)));
 	case Symbol::s_dot:
@@ -369,8 +364,9 @@ PNode Compiler::compileBlockContent() {
 	vm.push_scope(Value());
 	vm.push_scope(Value());
 
-	std::vector<PNode> nodes, code;
-	bool clear = true;
+	std::vector<PNode> nodes;
+	std::unordered_set<std::string> vars;
+	std::optional<Value> result;
 
 
 	auto s = next();
@@ -379,38 +375,39 @@ PNode Compiler::compileBlockContent() {
 		if (s.symbol != Symbol::separator) {
 			PNode cmd = compileCommand();
 			Value bk = packToValue(buildCode(cmd, loc));
+			result.reset();
 			bool err = false;
-			if (!clear) vm.pop_value();
-			clear = true;
 			vm.push_task(std::make_unique<CompileTimeContent>(err));
 			vm.push_task(std::make_unique<BlockExecution>(bk));
 			while (vm.run());
 			if (err) {
 				nodes.push_back(std::make_unique<InputLineMapNode>(l,std::move(cmd)));
 			} else {
-				clear = false;
+				Value variables = vm.scope_to_object();
+				bool has_res = true;
+				for (Value x: variables) {
+					auto k = x.getKey();
+					if (vars.insert(std::string(k)).second) {
+						has_res = false;
+						nodes.push_back(
+							std::make_unique<Assignment>(
+									std::make_unique<SimpleAssignNode>(k),
+									std::make_unique<ValueNode>(x)));
+					}
+				}
+				if (has_res) result = vm.pop_value();
+
 			}
 		} else {
 			commit();
 		}
 		s = next();
 	}
-	Value variables = vm.scope_to_object();
-	for (Value x: variables) {
-			code.push_back(
-				std::make_unique<Assignment>(
-						std::make_unique<SimpleAssignNode>(x.getKey()),
-						std::make_unique<ValueNode>(x)));
-
-	}
-	for (PNode &nd: nodes) {
-		code.push_back(std::move(nd));
-	}
-	if (!clear) {
-		code.push_back(std::make_unique<ValueNode>(vm.pop_value()));
+	if (result.has_value()) {
+		nodes.push_back(std::make_unique<ValueNode>(*result));
 	}
 
-	return std::make_unique<BlockNode>(std::move(code));
+	return std::make_unique<BlockNode>(std::move(nodes));
 
 }
 
@@ -869,6 +866,12 @@ PNode Compiler::compileNumber() {
 		res = strtoull(buffer.c_str(),nullptr, 10);
 	}
 	return std::make_unique<NumberNode>(res);
+}
+
+Value Compiler::compileString(const CodeLocation &loc, const std::string_view &str) {
+	auto iter = str.begin();
+	auto e = str.end();
+	return compileText(loc, [&](){return iter == e?-1:static_cast<int>(*iter++);});
 }
 
 PNode Compiler::compileCast(PNode &&expr, PNode &&baseObj) {

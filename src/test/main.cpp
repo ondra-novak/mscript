@@ -111,14 +111,12 @@ static int showcode(CmdArgIter &iter) {
 	int e = openFile(iter, fin);
 	if (e) return e;
 
-	std::vector<mscript::Element> elements;
-	parseScript([&](){
-		return fin.get();
-	}, elements);
+	Value global = getVirtualMachineRuntime();
 
+	Compiler cmp(global);
+	auto code = cmp.compileText({"input",1}, [&](){	return fin.get();});
 
-
-	auto block = mscript::compile(elements, getVirtualMachineRuntime(), {"input",1});
+	auto block = getBlockFromValue(code);
 	block.disassemble(show_instruction);
 
 	return 0;
@@ -133,15 +131,10 @@ static int run(CmdArgIter &iter, bool debug) {
 	int e = openFile(iter, fin);
 	if (e) return e;
 
-	std::vector<mscript::Element> elements;
-	parseScript([&](){
-		return fin.get();
-	}, elements);
-
-
 	Value global = getVirtualMachineRuntime();
 
-	auto block = packToValue(mscript::compile(elements, global, {"input",1}));
+	Compiler cmp(global);
+	Value block = cmp.compileText({"input",1}, [&](){return fin.get();});
 
 	global.setItems({
 		{"print",defineSimpleFn([](const ValueList &ppack)->Value{

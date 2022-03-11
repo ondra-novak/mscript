@@ -1,0 +1,12 @@
+__operator=object __operator {
+	mmult=(a,b)=>{
+		for(x:a, l=[]) {
+			r = for (y:b, r=[]) {
+				r = r.push_back(x*y)
+			}
+			l = l.push_back(r)
+		}
+	}
+}
+
+[1,2,3] mmult [8,9,10]

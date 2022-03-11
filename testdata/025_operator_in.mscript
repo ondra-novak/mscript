@@ -1,0 +1,5 @@
+obj = object {
+	A=1
+	B=true
+}
+("A" in obj, "B" in obj, "C" in obj)

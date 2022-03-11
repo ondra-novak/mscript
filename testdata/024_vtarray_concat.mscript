@@ -1,0 +1,22 @@
+A=[1,2,3,4,5]
+B=[33,44,58]
+
+concat=(a,b)=>{
+	
+	fn=object (x)=>{x<sz?a[x]:b[x-sz]} {
+	  a=A
+	  b=B
+	  sz=A.size()
+	} 
+	
+	vtarray(A.size()+B.size(),fn)
+}
+
+AB=concat(A,B)
+
+for (I:AB, sep="") {
+	print(sep,I)
+	sep=","
+}
+
+
