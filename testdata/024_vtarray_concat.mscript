@@ -12,11 +12,13 @@ concat=(a,b)=>{
 	vtarray(A.size()+B.size(),fn)
 }
 
-AB=concat(A,B)
+AB?=concat(A,B)
 
 for (I:AB, sep="") {
 	print(sep,I)
 	sep=","
 }
+
+AB.copy()  # convert vtarray to normal array (so it can be returned and displayed)
 
 

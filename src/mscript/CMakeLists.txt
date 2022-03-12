@@ -12,6 +12,7 @@ add_library (mscript
 	range.cpp
 	arrbld.cpp
 	procarr.cpp
+	generator.cpp
 )
 
 

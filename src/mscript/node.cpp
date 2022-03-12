@@ -259,8 +259,8 @@ void MethodCallNode::generateExpression(BlockBld &blk) const {
 class FunctionTask: public BlockExecution {
 public:
 	///Requires identifiers and block
-	FunctionTask(const std::vector<std::string> &identifiers, bool expand_last, Value block, Value object, Value closure)
-		:BlockExecution(block) ,identifiers(identifiers),object(object),closure(closure),expand_last(expand_last) {}
+	FunctionTask(const UserFn &fn, Value object, Value closure)
+		:BlockExecution(fn.getCode()),fn(fn) ,object(object),closure(closure) {}
 
 	///Called during init
 	/**
@@ -269,13 +269,20 @@ public:
 	 * Function must create scope, then pushes arguments to the scope, drops arguments and starts the function
 	 */
 	virtual bool init(VirtualMachine &vm) {
-		if (object.defined()) vm.push_scope(object);
-		vm.push_scope(closure);
-		scope = true;
+		scopes = 0;
+		if (object.type() == json::object) {vm.push_scope(object);++scopes;}
+		if (closure.type() == json::object) {
+			vm.push_scope(closure);
+		} else {
+			vm.push_scope(Value());
+		}
+		++scopes;
+
 		auto args = vm.top_params();
 		std::size_t idx = 0;
+		const auto &identifiers = fn.getIdentifiers();
 		auto i = identifiers.begin();
-		bool expl = expand_last && !identifiers.empty();
+		bool expl = fn.is_expand_all() && !identifiers.empty();
 		auto e = expl?(identifiers.begin()+identifiers.size()-1):identifiers.end();
 		while (i != e) {
 			vm.set_var(*i, args[idx]);
@@ -299,12 +306,9 @@ public:
 	 */
 	virtual bool run(VirtualMachine &vm) {
 		if (!BlockExecution::run(vm)) {
-			if (scope) {
+			while (scopes) {
 				vm.pop_scope();
-				if (object.defined()) {
-					vm.pop_scope();
-				}
-				scope = false;
+				--scopes;
 			}
 			return false;
 		} else {
@@ -313,17 +317,16 @@ public:
 	}
 
 protected:
-	bool scope = false;
+	int scopes = 0;
 	///identifiers are used only during init - so it can be const
-	const std::vector<std::string> &identifiers;
+	const UserFn &fn;
 	Value object;
 	Value closure;
-	bool expand_last;
 };
 
 
-std::unique_ptr<AbstractTask> UserFn::call(VirtualMachine &vm, Value object, Value closure) const  {
-	return std::make_unique<FunctionTask>(identifiers, expand_last,code,  object, closure);
+void UserFn::call(VirtualMachine &vm, Value object, Value closure) const  {
+	vm.push_task(std::make_unique<FunctionTask>(*this, object, closure));
 }
 
 

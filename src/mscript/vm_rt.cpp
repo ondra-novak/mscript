@@ -9,31 +9,166 @@
 #include <cmath>
 #include <random>
 #include <imtjson/object.h>
+#include <imtjson/operations.h>
 #include <mscript/arrbld.h>
 #include <mscript/procarr.h>
 #include "vm.h"
 #include "block.h"
 #include "function.h"
 #include "vm_rt.h"
+#include "generator.h"
 
 using mscript::VirtualMachine;
 
 namespace mscript {
 
 
-class MapTask: public AbstractTask {
-public:
-		MapTask(Value object):src(object),idx(0) {}
-		virtual bool init(VirtualMachine &vm) override;
-		virtual bool run(VirtualMachine &vm) override;
-protected:
-		Value src;
-		Value fn;
-		std::size_t idx;
+template<typename Fn>
+static void asyncDeref(VirtualMachine &vm, Value obj, std::size_t idx, Fn &&cb) {
+	if (isProcArray(obj)) {
+		vm.call_function(getProcArray(obj).fn, Value(), idx)
+			>> [fn = std::forward<Fn>(cb)](VirtualMachine &vm) mutable {
+				fn(vm, vm.pop_value());
+			};
+	} else {
+		cb(vm, obj[idx]);
+	}
+}
 
+template<bool findIndex>
+class ArrayFindTask: public AbstractTask {
+public:
+	ArrayFindTask(Value obj, Value fn)
+			:obj(obj),fn(fn),lastRes(nullptr),idx(0),sz(obj.size()) {}
+
+	virtual bool init(VirtualMachine &vm)override  {return true;}
+	virtual bool run(VirtualMachine &vm) override {
+		if (idx) {
+			Value r = vm.pop_value();
+			if  (r.getBool()) {
+				if (findIndex) vm.push_value(idx-1);else vm.push_value(lastRes);
+				return false;
+			}
+		}
+		if (idx >= sz) {
+			if (findIndex) vm.push_value(-1);else vm.push_value(nullptr);
+			return false;
+		}
+		asyncDeref(vm, obj, idx, [this](VirtualMachine &vm, Value v){
+			lastRes = v;
+			vm.call_function(fn, Value(), v, idx, obj);
+			++idx;
+		});
+		return true;
+	}
+
+protected:
+	Value obj;
+	Value fn;
+	Value lastRes;
+	std::size_t idx;
+	std::size_t sz;
+};
+
+class ArrayMap: public AbstractTask {
+public:
+	ArrayMap(Value obj, Value fn)
+			:obj(obj),fn(fn),result(json::array),idx(0) {}
+
+	virtual bool init(VirtualMachine &vm)override  {
+		asyncDeref(vm, obj, idx, [this](VirtualMachine &vm, Value v){
+			vm.call_function(fn, Value(), v, idx, obj);
+		});
+		return true;
+
+	}
+	virtual bool run(VirtualMachine &vm) override {
+		auto r = vm.top_params();
+		vm.pop_value();
+		for (Value x: r) result = arrayPushBack(result, x);
+		idx++;
+		if (idx == obj.size()) {
+			vm.push_value(result.map([](Value x){return x;}));
+			return false;
+		}
+		return init(vm);
+	}
+
+protected:
+	Value obj;
+	Value fn;
+	Value result;
+	std::size_t idx;
+};
+
+
+class ArraySort: public AbstractTask, public Generator {
+public:
+	ArraySort(Value arr, Value fn):arr(arr),fn(fn) {
+	}
+
+	~ArraySort() {
+	}
+
+	void generatingFunction() override {
+		result = arr.sort([&](Value a, Value b){
+			left = a;
+			right = b;
+			side = 0;
+			suspend_generator();
+			return res;
+		});
+	}
+
+	virtual bool init(VirtualMachine &vm) override {
+		resume_generator();
+		if (done) {
+			vm.push_value(result);
+			return false;
+		} else {
+			vm.call_function(fn, Value(), left,right);
+			return true;
+		}
+	}
+	virtual bool run(VirtualMachine &vm) override {
+		Value cmpRes =vm.pop_value();
+		res = cmpRes.getInt();
+		return init(vm);
+	}
+
+
+protected:
+	Value arr;
+	Value fn;
+	Value left;
+	Value right;
+	int res = 0;
+	Value result;
 
 };
 
+template<typename Fn>
+static void arrayCopyAsync(VirtualMachine &vm, json::RefCntPtr<json::ArrayValue> cont, Value arr, Fn &&out) {
+	vm.call_function(getProcArray(arr).fn, Value(), cont->size())
+			>> [arr, cont, out = std::forward<Fn>(out)](VirtualMachine &vm) mutable {
+		Value v = vm.pop_value();
+		cont->push_back(v.getHandle());
+		if (cont->size() == arr.size()) out(vm,Value(json::PValue::staticCast(cont)));
+		else arrayCopyAsync(vm,cont,arr,std::forward<Fn>(out));
+	};
+
+}
+static void arrayCopy(VirtualMachine &vm, json::Value arr) {
+	if (isProcArray(arr)) {
+		auto cont = json::ArrayValue::create(arr.size());
+		arrayCopyAsync(vm, cont, arr, [](VirtualMachine &vm, Value v){vm.push_value(v);});
+	} else if (dynamic_cast<const json::ArrayValue *>(arr.getHandle()->unproxy())) {
+		vm.push_value(arr);
+	} else {
+		Value cp(json::array, arr.begin(), arr.end(), [](Value x){return x;});
+		vm.push_value(cp);
+	}
+}
 
 Value getVirtualMachineRuntime() {
 
@@ -110,6 +245,19 @@ static Value rt = json::Object {
 		})},
 		{"reverse",defineSimpleMethod([](Value obj, ValueList params){return obj.reverse();})},
 		{"indexOf",defineSimpleMethod([](Value obj, ValueList params){return obj.indexOf(params[0], params[1].getUInt());})},
+		{"find", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){vm.push_task(std::make_unique<ArrayFindTask<false> >(obj,params[0]));})},
+		{"findIndex", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){vm.push_task(std::make_unique<ArrayFindTask<true> >(obj,params[0]));})},
+		{"sort", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){
+			if (obj.size()<2) vm.push_value(obj);
+			else vm.push_task(std::make_unique<ArraySort>(obj,params[0]));})},
+		{"copy", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList ){
+			if (obj.empty()) vm.push_value(obj);
+			else arrayCopy(vm, obj);
+		})},
+		{"map", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){
+			if (obj.empty()) vm.push_value(obj);
+			else vm.push_task(std::make_unique<ArrayMap>(obj,params[0]));
+		})}
 	}},
 	{"String",json::Object {
 
@@ -128,7 +276,11 @@ static Value rt = json::Object {
 		if (size.type() != json::number) throw std::runtime_error("vtarray - the second argument must be a number");
 		if (!isFunction(fn)) throw std::runtime_error("vtarray - the second argument must be a function");
 		return packProcArray(fn, size.getUInt());
-	})}
+	})},
+	{"typeof",defineSimpleFn([](ValueList params){return strTypeClasses[params[0].type()];})},
+	{"keyof",defineSimpleFn([](ValueList params){return params[0].getKey();})},
+	{"strip_key",defineSimpleFn([](ValueList params){return params[0].stripKey();})},
+
 
 
 

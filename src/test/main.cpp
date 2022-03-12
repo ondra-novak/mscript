@@ -156,10 +156,12 @@ static int run(CmdArgIter &iter, bool debug) {
 	vm.setGlobalScope(global);
 	Value v;
 	if (debug) {
+		vm.run(); //enforce reset
 		vm.push_scope(Value());
 		vm.push_scope(Value());
 		vm.push_task(std::make_unique<BlockExecution>(block));
 		do {
+			vm.prepare_all_tasks();
 			const auto &ts = vm.getTaskStack();
 			const BlockExecution *bt = nullptr;
 			if (!ts.empty()) bt = dynamic_cast<const BlockExecution *>(ts.back().get());

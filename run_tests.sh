@@ -2,7 +2,7 @@
 for I in testdata/*.mscript
 do 
     echo TEST $I
-     bin/test run $I
+     bin/mscript_cli run $I
      echo "------------------"
 done 
 

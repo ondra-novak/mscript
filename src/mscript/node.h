@@ -393,7 +393,7 @@ namespace mscript {
 	public:
 		UserFn(Value &&code, std::vector<std::string> &&identifiers, bool expand_last)
 			:code(std::move(code)), identifiers(identifiers),expand_last(expand_last) {}
-		virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value object, Value closure) const override;
+		virtual void call(VirtualMachine &vm, Value object, Value closure) const override;
 		const Value& getCode() const {return code;}
 		const std::vector<std::string>& getIdentifiers() const {return identifiers;}
 		bool is_expand_all() const {return expand_last;}

@@ -24,16 +24,12 @@ public:
 	 *  If function runs immediately, it picks arguments from virtual machine and pushes return value.
 	 *  Then it returns nullptr for AbstractTask
 	 *
-	 *  @param vm virtual machine where execute the function
-	 *  @return if function need to be run as task, it can create task and return it. Otherwise,
-	 *  it can return null, if the result is immediately available
-	 *
 	 *  @param vm virtual machine
 	 *  @param object object, if the function is part of an object (optional)
 	 *  @param closure closure context (optional)
 	 *
 	 */
-	virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value object, Value closure) const = 0;
+	virtual void call(VirtualMachine &vm, Value object, Value closure) const = 0;
 
 };
 
@@ -61,8 +57,8 @@ template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<Virtua
 static inline Value defineFunction(Fn &&fn) {
 	class FnClass: public AbstractFunction {
 	public:
-		virtual std::unique_ptr<AbstractTask> call(VirtualMachine &vm, Value object, Value closure) const override {
-			return fn(vm, object, closure);
+		virtual void  call(VirtualMachine &vm, Value object, Value closure) const override {
+			fn(vm, object, closure);
 		}
 		FnClass(Fn &&fn):fn(std::forward<Fn>(fn)) {}
 	protected:
@@ -79,7 +75,7 @@ static inline Value defineSimpleFn(Fn &&fn) {
 		Value ret = fn(params);
 		vm.del_value();
 		vm.push_value(ret);
-		return nullptr;
+
 	});
 }
 
@@ -90,7 +86,24 @@ static inline Value defineSimpleMethod(Fn &&fn) {
 		Value ret = fn(obj, params);
 		vm.del_value();
 		vm.push_value(ret);
-		return nullptr;
+	});
+}
+
+template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<VirtualMachine &>(),std::declval<Value>(),std::declval<ValueList>()))>
+static inline Value defineAsyncMethod(Fn &&fn) {
+	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value obj, Value){
+		auto params = vm.top_params();
+		vm.del_value();
+		fn(vm,obj, params);
+	});
+}
+
+template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<VirtualMachine &>(), std::declval<ValueList>()))>
+static inline Value defineAsyncFunction1(Fn &&fn) {
+	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value, Value){
+		auto params = vm.top_params();
+		vm.del_value();
+		fn(vm,params);
 	});
 }
 

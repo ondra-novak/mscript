@@ -26,6 +26,7 @@ Value Scope::convertToObject() const {
 	} else {
 		return obj;
 	}
+
 }
 
 void VirtualMachine::setGlobalScope(Value globalScope) {
@@ -33,32 +34,63 @@ void VirtualMachine::setGlobalScope(Value globalScope) {
 }
 
 void VirtualMachine::reset() {
-	taskStack.clear();
-	calcStack.clear();
 	scopeStack.clear();
-	exp = nullptr;
-
+	do_run = &VirtualMachine::run_reset;
 }
 
-bool VirtualMachine::run() {
-	std::size_t task_sz = taskStack.size();
-	if (!task_sz) return false;
-	const auto &task = taskStack.back();
+bool VirtualMachine::run_reset() {
+	taskStack.clear();
+	calcStack.clear();
+	exp = nullptr;
+	return run_add_task();
+}
+void VirtualMachine::prepare_all_tasks() {
+	while (!newTasks.empty()) {
+		std::swap(tmpTasks, newTasks);
+		for (auto &t : tmpTasks) {
+			if (t->init(*this)) taskStack.push_back(std::move(t));
+		}
+		tmpTasks.clear();
+	}
+}
+
+bool VirtualMachine::run_add_task() {
+	prepare_all_tasks();
+
+	if (taskStack.empty()) {
+		do_run = &VirtualMachine::run_add_task;
+		return false;
+	}
+	if (timeStop.has_value()) {
+		do_run = &VirtualMachine::run_fast_wtimer;
+	} else {
+		do_run = &VirtualMachine::run_fast;
+	}
+	curTask = taskStack.back().get();
+	return (this->*do_run)();
+}
+
+bool VirtualMachine::run_fast_wtimer() {
 	if (timeStop.has_value()) {
 		auto now = std::chrono::system_clock::now();
 		if (now > *timeStop) {
 			throw MaxExecutionTimeReached();
 		}
+	} else {
+		do_run = &VirtualMachine::run_fast;
 	}
-	if (!task->run(*this)) {
-		//so task returned false, but added task or more tasks - we need to delete it from middle
-		if (task_sz >= taskStack.size()) {
-			taskStack.erase(taskStack.begin()+task_sz-1);
-			//if no task added, remove last task
-		} else if (task_sz == taskStack.size()) {
-			taskStack.pop_back();
+	return run_fast();
+}
+
+bool VirtualMachine::run_fast() {
+	if (!curTask->run(*this)) {
+		taskStack.pop_back();
+		if (taskStack.empty()) {
+			do_run = &VirtualMachine::run_reset; //code exited, next action would be reset
+			return false;
+		} else {
+			curTask = taskStack.back().get();
 		}
-		//if tasks are reduced, then no action is performed, last task was probably terminated by exception
 	}
 	return true;
 }
@@ -82,12 +114,13 @@ void VirtualMachine::push_scope(const Value base) {
 }
 
 void VirtualMachine::push_task(std::unique_ptr<AbstractTask>&&task) {
-	auto sz = taskStack.size();
+	auto sz = taskStack.size()+newTasks.size();
 	if (sz >= cfg.maxTaskStack) {
 		throw ExecutionLimitReached(LimitType::taskStack);
 	}
-	if (task->init(*this)) {
-		taskStack.push_back(std::move(task));
+	newTasks.push_back(std::move(task));
+	if (do_run != &VirtualMachine::run_reset) {
+		do_run = &VirtualMachine::run_add_task;
 	}
 }
 
@@ -130,13 +163,19 @@ ValueList VirtualMachine::top_params() const {
 }
 
 void VirtualMachine::raise(std::exception_ptr e) {
+	if (e != nullptr) exp = e;
+	do_run = &VirtualMachine::run_exception; //flag VM, we need to run exception handler
+}
+bool VirtualMachine::run_exception() {
 	exp_location.clear();
+	newTasks.clear(); //in case of exception, clear all new tasks
 	std::size_t p = taskStack.size();
 	while (p) {
 		--p;
-		if (taskStack[p]->exception(*this, e)) {
+		if (taskStack[p]->exception(*this, exp)) {
 			if (taskStack.size() > p+1) taskStack.resize(p+1);
-			return;
+			exp = nullptr;
+			return run_add_task(); //<to sync tasks and flags
 		}
 		auto loc = taskStack[p]->getCodeLocation();
 		if (loc.has_value()) {
@@ -144,7 +183,7 @@ void VirtualMachine::raise(std::exception_ptr e) {
 		}
 	}
 	reset();
-	exp = e;
+	return false;
 }
 
 bool VirtualMachine::pop_scope() {
@@ -288,13 +327,9 @@ bool VirtualMachine::call_function_raw(Value fnval, Value object) {
 		throw ArgumentIsNotFunction(fnval);
 	} else {
 		const AbstractFunction &fnobj = getFunction(fnval);
-		auto task = fnobj.call(*this,object,fnval.type()==json::object?fnval:Value());
-		if (task != nullptr) {
-			push_task(std::move(task));
-			return true;
-		} else {
-			return false;
-		}
+		auto sz = newTasks.size();
+		fnobj.call(*this,object,fnval);
+		return sz != newTasks.size();
 	}
 }
 
@@ -369,5 +404,9 @@ void VirtualMachine::finish_list() {
 	push_value(json::PValue::staticCast(lv));
 }
 
+
+void VirtualMachine::push_cb_task(std::unique_ptr<AbstractTask> &&t) {
+	newTasks.insert(newTasks.begin(),std::move(t));
+}
 }
 

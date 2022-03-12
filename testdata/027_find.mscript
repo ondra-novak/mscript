@@ -1,0 +1,7 @@
+A?=[1,4,8,20,3,78,32]
+printnl(A.find(x=>x==20))
+printnl(A.find(x=>x==0))
+printnl(A.findIndex(x=>x==20))
+printnl(A.findIndex(x=>x==0))
+
+

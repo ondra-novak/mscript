@@ -71,6 +71,21 @@ public:
 };
 
 
+template<typename Fn>
+std::unique_ptr<AbstractTask> createCallbackTask(Fn &&fn) {
+	class CB: public AbstractTask {
+	public:
+		Fn fn;
+		CB(Fn &&fn):fn(std::forward<Fn>(fn)) {}
+		CB(CB &&other):fn(std::move(fn)) {}
+		virtual bool init(VirtualMachine &) override {return true;}
+		virtual bool run(VirtualMachine &vm) override {
+			fn(vm);
+			return false;
+		}
+	};
+	return std::make_unique<CB>(std::forward<Fn>(fn));
+}
 
 class Scope {
 public:
@@ -128,7 +143,9 @@ public:
 
 	void reset();
 	///run virtual machine for single step
-	bool run();
+	inline bool run() {
+		return (this->*do_run)();
+	}
 	///Raise exception
 	/** When exception is raised, tasks are explored from top to bottom to handle exception.
 	 * If task can handle exception, it will continue to run, otherwise exception is thrown to
@@ -230,15 +247,50 @@ public:
 	///When machine stops because exception, this returns code location of the exception
 	std::vector<CodeLocation> getExceptionCodeLocation() const;
 
-	///Passes arguments to stack and calls function
+	class CallFnRet {
+	public:
+		CallFnRet(VirtualMachine &vm, bool async):vm(vm),async(async) {}
+		CallFnRet(const CallFnRet &other) = delete;
+		template<typename Fn>
+		void operator>>(Fn &&cb) {
+			addCB(std::forward<Fn>(cb));
+		}
+	protected:
+		VirtualMachine &vm;
+		bool async;
+
+		template<typename Fn>
+		auto addCB(Fn &&fn) -> decltype(std::declval<Fn>()(std::declval<VirtualMachine &>())) {
+			if (async) {
+				vm.push_cb_task(createCallbackTask(std::forward<Fn>(fn)));
+			} else {
+				vm.push_task(createCallbackTask(std::forward<Fn>(fn)));
+			}
+		}
+		template<typename Fn>
+		auto addCB(Fn &&fn) -> decltype(std::declval<Fn>()(std::declval<VirtualMachine &>(),std::declval<Value>())) {
+			addCB([fn=std::forward<Fn>(fn)](VirtualMachine &vm) mutable {
+				fn(vm, vm.pop_value());
+			});
+		}
+	};
+
+	///Passes arguments to stack and calls a script function
 	/**
+	 * @note Functions can be asynchronous from the perspective of C++ code.
+	 * This means, the function don't need to be immediately executed.
+	 * This is reason, why you need to add callback function to receive the result
+	 *
 	 * @param fnval function value
 	 * @param args arguments
-	 * @retval false function executed synchronously - result is immediately available
-	 * @retval true function executed asynchronously - result will be available on next cycle
+	 * @return function returns helper object which can be used to specify callback
+	 * function through >> operator
+	 * call_function(...) >> [](VirtualMachine &vm) {
+	 * 		... process result
+	 * }
 	 */
 	template<typename ... Args>
-	bool call_function(Value fnval, Value object, const Args & ... args);
+	CallFnRet call_function(Value fnval, Value object, const Args & ... args);
 
 	///Calls function, while arguments are already ready on stack
 	/**
@@ -286,19 +338,31 @@ public:
 		return taskStack;
 	}
 
+	const TaskStack& getNewTasks() const {
+		return newTasks;
+	}
+
 	void begin_list();
 	void finish_list();
+
+	///prepare all new tasks separately - useful while debugging to see state after tasks are prepared;
+	void prepare_all_tasks();
 
 protected:
 
 	Config cfg;
-	TaskStack taskStack;
+	TaskStack taskStack; //<list of active tasks
+	TaskStack newTasks;	 //<list of newly added task
+	TaskStack tmpTasks;	 //<temporary task - while task being processed
 	CalcStack calcStack;
 	ScopeStack scopeStack;
 	Value globalScope;
 	std::exception_ptr exp = nullptr;
 	std::vector<CodeLocation> exp_location;
 	std::optional<std::chrono::system_clock::time_point> timeStop;
+
+	bool (VirtualMachine::*do_run)() = &VirtualMachine::run_reset;
+	AbstractTask *curTask;
 
 	template<typename ... Args>
 	void push_arguments(const Value &v, const Args & ... args) {
@@ -310,17 +374,22 @@ protected:
 
 	bool comile_time = false;
 
+	bool run_fast();
+	bool run_add_task();
+	bool run_fast_wtimer();
+	bool run_reset();
+	bool run_exception();
+
+	void push_cb_task(std::unique_ptr<AbstractTask> &&);
 
 };
 
 template<typename ... Args>
-inline bool VirtualMachine::call_function(Value fnval, Value object, const Args &... args) {
+inline VirtualMachine::CallFnRet VirtualMachine::call_function(Value fnval, Value object, const Args &... args) {
 	push_arguments(args...);
 	define_param_pack(sizeof...(Args));
-	return call_function_raw(fnval, object);
+	return CallFnRet(*this,call_function_raw(fnval, object));
 }
-
-
 
 
 
