@@ -255,6 +255,9 @@ void MethodCallNode::generateExpression(BlockBld &blk) const {
 	}
 }
 
+static Value thisVal("this");
+static Value closureVal("closure");
+
 //Task handles executing a function - pushes argument to scope
 class FunctionTask: public BlockExecution {
 public:
@@ -293,8 +296,8 @@ public:
 			vm.set_var(identifiers.back(),args.toValue().slice(identifiers.size()-1));
 		}
 		vm.del_value();
-		if (object.defined()) vm.set_var("this", object);
-		if (closure.defined()) vm.set_var("closure", closure);
+		if (object.defined()) vm.set_var(thisVal, object);
+		if (closure.defined()) vm.set_var(closureVal, closure);
 
 		return BlockExecution::init(vm);
 	}
@@ -330,7 +333,7 @@ void UserFn::call(VirtualMachine &vm, const Value &object, const Value &closure)
 }
 
 
-Value defineUserFunction(std::vector<std::string> &&identifiers, bool expand_last, PNode &&body, const CodeLocation &loc) {
+Value defineUserFunction(std::vector<Value> &&identifiers, bool expand_last, PNode &&body, const CodeLocation &loc) {
 	Value code = packToValue(buildCode(body, loc));
 	auto ptr = std::make_unique<UserFn>(std::move(code), std::move(identifiers), expand_last);
 	Value name = {"@FN",loc.file, loc.line};

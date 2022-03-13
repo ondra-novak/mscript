@@ -13,13 +13,16 @@
 namespace mscript {
 
 
-Scope::Scope(Value base):base(base) { }
+void Scope::init(Value base){
+	this->base = base;
+	items.clear();
+}
 
 
 Value Scope::convertToObject() const {
 	json::Object obj(base);
 	for (const auto &x: items) {
-		obj.set(x.first, x.second);
+		obj.set(x.name, x.value);
 	}
 	if (isFunction(base)) {
 		return repackFunction(base, obj);
@@ -35,7 +38,18 @@ void VirtualMachine::setGlobalScope(Value globalScope) {
 
 void VirtualMachine::reset() {
 	scopeStack.clear();
-	do_run = &VirtualMachine::run_reset;
+	run_mode = RunMode::run_reset;
+}
+
+bool VirtualMachine::run() {
+	switch (run_mode) {
+	case RunMode::run_fast:return run_fast();
+	case RunMode::run_exception: return run_exception();
+	case RunMode::run_add_task: return run_add_task();
+	case RunMode::run_fast_wtimer: return run_fast_wtimer();
+	case RunMode::run_reset: return run_reset();
+	}
+	return false;
 }
 
 bool VirtualMachine::run_reset() {
@@ -58,16 +72,16 @@ bool VirtualMachine::run_add_task() {
 	prepare_all_tasks();
 
 	if (taskStack.empty()) {
-		do_run = &VirtualMachine::run_add_task;
+		run_mode = RunMode::run_add_task;
 		return false;
 	}
 	if (timeStop.has_value()) {
-		do_run = &VirtualMachine::run_fast_wtimer;
+		run_mode = RunMode::run_fast_wtimer;
 	} else {
-		do_run = &VirtualMachine::run_fast;
+		run_mode = RunMode::run_fast;
 	}
 	curTask = taskStack.back().get();
-	return (this->*do_run)();
+	return run();
 }
 
 bool VirtualMachine::run_fast_wtimer() {
@@ -77,7 +91,7 @@ bool VirtualMachine::run_fast_wtimer() {
 			throw MaxExecutionTimeReached();
 		}
 	} else {
-		do_run = &VirtualMachine::run_fast;
+		run_mode = RunMode::run_fast;
 	}
 	return run_fast();
 }
@@ -86,7 +100,7 @@ bool VirtualMachine::run_fast() {
 	if (!curTask->run(*this)) {
 		taskStack.pop_back();
 		if (taskStack.empty()) {
-			do_run = &VirtualMachine::run_reset; //code exited, next action would be reset
+			run_mode = RunMode::run_reset; //code exited, next action would be reset
 			return false;
 		} else {
 			curTask = taskStack.back().get();
@@ -98,18 +112,23 @@ bool VirtualMachine::run_fast() {
 void VirtualMachine::push_scope(const Value base) {
 	auto sz = scopeStack.size();
 	if (!sz) {
+		scopeStack.emplace_back();
+		scopeStack.back().init(globalScope);
 		//if base is not defined, we can bind globalScope to current scope without need to create link
-		if (!base.defined()) {
-			scopeStack.emplace_back(globalScope);
-		}
-		else {
-			scopeStack.emplace_back(globalScope);
-			scopeStack.emplace_back(base);
+		if (base.defined()) {
+			scopeStack.emplace_back();
+			scopeStack.back().init(base);
 		}
 	} else if (sz >= cfg.maxScopeStack) {
 		throw ExecutionLimitReached(LimitType::scopeStack);
 	} else {
-		scopeStack.emplace_back(base);
+		if (tmpScopes.empty()) {
+			scopeStack.emplace_back();
+		} else{
+			scopeStack.push_back(std::move(tmpScopes.back()));
+			tmpScopes.pop_back();
+		}
+		scopeStack.back().init(base);
 	}
 }
 
@@ -119,8 +138,8 @@ void VirtualMachine::push_task(std::unique_ptr<AbstractTask>&&task) {
 		throw ExecutionLimitReached(LimitType::taskStack);
 	}
 	newTasks.push_back(std::move(task));
-	if (do_run != &VirtualMachine::run_reset) {
-		do_run = &VirtualMachine::run_add_task;
+	if (run_mode != RunMode::run_reset) {
+		run_mode = RunMode::run_add_task;
 	}
 }
 
@@ -140,6 +159,11 @@ bool VirtualMachine::get_var(const std::string_view &name, Value &value) {
 }
 
 bool VirtualMachine::set_var(const std::string_view &name, const Value &value) {
+	if (scopeStack.empty()) return false;
+	return scopeStack.back().set(name, value);
+}
+
+bool VirtualMachine::set_var(const Value &name, const Value &value) {
 	if (scopeStack.empty()) return false;
 	return scopeStack.back().set(name, value);
 }
@@ -164,7 +188,7 @@ ValueList VirtualMachine::top_params() const {
 
 void VirtualMachine::raise(std::exception_ptr e) {
 	if (e != nullptr) exp = e;
-	do_run = &VirtualMachine::run_exception; //flag VM, we need to run exception handler
+	run_mode = RunMode::run_exception; //flag VM, we need to run exception handler
 }
 bool VirtualMachine::run_exception() {
 	exp_location.clear();
@@ -188,27 +212,32 @@ bool VirtualMachine::run_exception() {
 
 bool VirtualMachine::pop_scope() {
 	if (scopeStack.empty()) return false;
+	tmpScopes.push_back(std::move(scopeStack.back()));
 	scopeStack.pop_back();
 	return true;
 }
 
 bool Scope::get(const std::string_view &name, Value &out) const {
-	auto iter = items.find(name);
+	auto iter = std::find_if(items.begin(), items.end(), [&](const Variable &v){return v.name == name;});
 	if (iter == items.end()) {
 		out = base[name];
 		return out.getKey() == name;
 	}
 	else {
-		out = iter->second;
+		out = iter->value;
 		return true;
 	}
-
 }
 
 
 bool Scope::set(const std::string_view &name, const Value &v) {
-	auto res = items.emplace(std::string(name), v);
-	return res.second;
+	return set(Value(name),v);
+}
+bool Scope::set(const Value &name, const Value &v) {
+	auto n = name.getString();
+	if (std::find_if(items.begin(), items.end(), [&](const Variable &v){return v.name == n;}) != items.end()) return false;
+	items.push_back(Variable(name, v));
+	return true;
 }
 
 Value VirtualMachine::top_value() const {
@@ -230,26 +259,11 @@ void VirtualMachine::push_value(const Value &val) {
 	calcStack.push_back(val);
 }
 
-Value VirtualMachine::get_this() {
-	auto sz = scopeStack.size();
-	if (sz<2) return json::undefined;
-	auto &topscope = scopeStack.back();
-	auto iter = topscope.find("this");
-	if (iter == topscope.end()) {
-		const auto &scope = scopeStack[sz-2];
-		Value t =  scope.convertToObject();
-		topscope.set("this", t);
-		return t;
-	} else {
-		return iter->second;
-	}
-}
-
 bool VirtualMachine::restore_state(const VMState &st) {
 	if (st.scopes > scopeStack.size() || st.values > calcStack.size()) {
 		return false;
 	}
-	scopeStack.resize(st.scopes, Scope(Value()));
+	scopeStack.resize(st.scopes, Scope());
 	calcStack.resize(st.values);
 	if (st.paramPack.has_value()) {
 		for (Value x: *st.paramPack) push_value(x);

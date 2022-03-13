@@ -310,7 +310,7 @@ PValueListNode Compiler::compileValueList() {
 
 PNode Compiler::compileDefineFunction(PNode expr) {
 	const Identifier *in = dynamic_cast<const Identifier *>(expr.get());
-	std::vector<std::string> identifiers;
+	std::vector<Value> identifiers;
 	bool expandLast = false;
 	if (in) {
 		identifiers.push_back(in->getName().getString());
@@ -322,7 +322,7 @@ PNode Compiler::compileDefineFunction(PNode expr) {
 			if (x == nullptr) throw compileError("Expected identifier in argument of the function definition");
 			if (expandLast) throw compileError("Symbol ... (three dots) is allowed only for the last argument");
 			expandLast = k.expandArray;
-			identifiers.push_back(x->getName().getString());
+			identifiers.push_back(x->getName());
 		}
 	}
 	commit();

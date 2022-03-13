@@ -118,7 +118,7 @@ void Block::disassemble(Fn &&fn) const {
 						char c = '(';
 						for (const auto &x: idf) {
 							idlist.push_back(c);
-							idlist.append(x);
+							idlist.append(x.getString());
 							c = ',';
 						}
 						idlist.push_back(')');

@@ -333,7 +333,7 @@ namespace mscript {
 	};
 
 
-	Value defineUserFunction(std::vector<std::string> &&identifiers, bool expand_last, PNode &&body, const CodeLocation &loc);
+	Value defineUserFunction(std::vector<Value> &&identifiers, bool expand_last, PNode &&body, const CodeLocation &loc);
 
 	Block buildCode(const PNode &nd, const CodeLocation &loc);
 
@@ -391,16 +391,16 @@ namespace mscript {
 
 	class UserFn: public AbstractFunction {
 	public:
-		UserFn(Value &&code, std::vector<std::string> &&identifiers, bool expand_last)
+		UserFn(Value &&code, std::vector<Value> &&identifiers, bool expand_last)
 			:code(std::move(code)), identifiers(identifiers),expand_last(expand_last) {}
 		virtual void call(VirtualMachine &vm, const Value &object, const Value &closure) const override;
 		const Value& getCode() const {return code;}
-		const std::vector<std::string>& getIdentifiers() const {return identifiers;}
+		const std::vector<Value>& getIdentifiers() const {return identifiers;}
 		bool is_expand_all() const {return expand_last;}
 
 	protected:
 		Value code;
-		std::vector<std::string> identifiers;
+		std::vector<Value> identifiers;
 		bool expand_last;
 	};
 

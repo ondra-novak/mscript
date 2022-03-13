@@ -191,9 +191,9 @@ static int run(CmdArgIter &iter, bool debug) {
 							}
 						}
 						for (const auto &vr: x) {
-							if (v[vr.first].defined()) std::cout << "*";
-							std::cout << vr.first << "=";
-							printValue(vr.second);
+							if (v[vr.name].defined()) std::cout << "*";
+							std::cout << vr.name << "=";
+							printValue(vr.value);
 							std::cout << " ";
 						}
 						std::cout << std::endl;

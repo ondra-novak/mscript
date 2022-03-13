@@ -89,22 +89,32 @@ std::unique_ptr<AbstractTask> createCallbackTask(Fn &&fn) {
 
 class Scope {
 public:
-	Scope(Value base);
+	void init(Value base);
+	Value getBase() const {return base;}
 
 	Value convertToObject() const;
 
+	bool set(const Value &name, const Value &v);
 	bool set(const std::string_view &name, const Value &v);
+	bool get(const std::string_view &name, Value &out) const;
+
+	struct Variable {
+		std::string_view name;
+		json::Value vname;
+		json::Value value;
+		Variable(json::Value vname, json::Value value):name(vname.getString()), vname(vname), value(value) {}
+	};
 
 	auto begin() const {return items.begin();}
 	auto end() const {return items.end();}
-	Value getBase() const {return base;}
-	auto find(const std::string_view &name) const {return items.find(name);}
-	bool get(const std::string_view &name, Value &out) const;
+	auto find(const std::string_view &key)  const {
+		return std::find_if(begin(), end(), [&](const Variable &v){return v.name == key;});
+	}
 
 protected:
-	Value base;
-	std::map<std::string, Value, std::less<> > items;
 
+	Value base;
+	std::vector<Variable> items;
 };
 
 
@@ -143,9 +153,7 @@ public:
 
 	void reset();
 	///run virtual machine for single step
-	inline bool run() {
-		return (this->*do_run)();
-	}
+	bool run();
 	///Raise exception
 	/** When exception is raised, tasks are explored from top to bottom to handle exception.
 	 * If task can handle exception, it will continue to run, otherwise exception is thrown to
@@ -215,9 +223,8 @@ public:
 	void collapse_param_pack();
 
 	bool set_var(const std::string_view &name, const Value &value);
+	bool set_var(const Value &name, const Value &value);
 	bool get_var(const std::string_view &name, Value &value);
-	///"this" is defined as scope object one level below current scope
-	Value get_this();
 	///"scope_base" is defined as base object of current scope
 	Value get_scope_base() const;
 
@@ -356,12 +363,22 @@ protected:
 	TaskStack tmpTasks;	 //<temporary task - while task being processed
 	CalcStack calcStack;
 	ScopeStack scopeStack;
+	ScopeStack tmpScopes;	//preallocated scopes
 	Value globalScope;
 	std::exception_ptr exp = nullptr;
 	std::vector<CodeLocation> exp_location;
 	std::optional<std::chrono::system_clock::time_point> timeStop;
 
-	bool (VirtualMachine::*do_run)() = &VirtualMachine::run_reset;
+	enum class RunMode {
+		run_fast,
+		run_add_task,
+		run_fast_wtimer,
+		run_reset,
+		run_exception
+	};
+
+	RunMode run_mode;
+
 	AbstractTask *curTask;
 
 	template<typename ... Args>
