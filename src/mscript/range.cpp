@@ -32,7 +32,7 @@ bool RangeValue::equal(const json::IValue *other) const  {
 
 
 json::RefCntPtr<const json::IValue> RangeValue::itemAtIndex(std::size_t index) const {
-	json::Value ret(base + dir*index);
+	json::Value ret(json::Int(base + dir*index));
 	return ret.getHandle();
 }
 

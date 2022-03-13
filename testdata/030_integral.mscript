@@ -1,0 +1,22 @@
+i1=Math.integral(x=>x,0,10)
+A= for(I : -1..20, out=[]) {
+	out=out.push_back(i1(I))
+}
+
+cp = 2/Math.sqrt(Math.PI)
+
+i2=Math.integral(x=>Math.exp(-(x^2)),0,1,17)
+B = for(I : 0..100, out=[]) {
+	out=out.push_back(cp*i2(I/100))
+}
+
+C = for(I : 0..100, out=[]) {
+	out=out.push_back(Math.erf(I/100))
+}
+
+
+printnl(A)
+printnl()
+printnl(B)
+printnl()
+printnl(C)

@@ -259,7 +259,7 @@ void MethodCallNode::generateExpression(BlockBld &blk) const {
 class FunctionTask: public BlockExecution {
 public:
 	///Requires identifiers and block
-	FunctionTask(const UserFn &fn, Value object, Value closure)
+	FunctionTask(const UserFn &fn, const Value &object, const Value &closure)
 		:BlockExecution(fn.getCode()),fn(fn) ,object(object),closure(closure) {}
 
 	///Called during init
@@ -325,7 +325,7 @@ protected:
 };
 
 
-void UserFn::call(VirtualMachine &vm, Value object, Value closure) const  {
+void UserFn::call(VirtualMachine &vm, const Value &object, const Value &closure) const  {
 	vm.push_task(std::make_unique<FunctionTask>(*this, object, closure));
 }
 

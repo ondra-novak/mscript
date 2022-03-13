@@ -29,7 +29,7 @@ public:
 	 *  @param closure closure context (optional)
 	 *
 	 */
-	virtual void call(VirtualMachine &vm, Value object, Value closure) const = 0;
+	virtual void call(VirtualMachine &vm, const Value &object, const Value &closure) const = 0;
 
 };
 
@@ -57,7 +57,7 @@ template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<Virtua
 static inline Value defineFunction(Fn &&fn) {
 	class FnClass: public AbstractFunction {
 	public:
-		virtual void  call(VirtualMachine &vm, Value object, Value closure) const override {
+		virtual void  call(VirtualMachine &vm, const Value &object, const Value &closure) const override {
 			fn(vm, object, closure);
 		}
 		FnClass(Fn &&fn):fn(std::forward<Fn>(fn)) {}
@@ -70,7 +70,7 @@ static inline Value defineFunction(Fn &&fn) {
 
 template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<ValueList>()))>
 static inline Value defineSimpleFn(Fn &&fn) {
-	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value, Value){
+	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, const Value &, const Value &){
 		auto params = vm.top_params();
 		Value ret = fn(params);
 		vm.del_value();
@@ -81,7 +81,7 @@ static inline Value defineSimpleFn(Fn &&fn) {
 
 template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<Value>(),std::declval<ValueList>()))>
 static inline Value defineSimpleMethod(Fn &&fn) {
-	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value obj, Value){
+	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, const Value &obj, const Value &){
 		auto params = vm.top_params();
 		Value ret = fn(obj, params);
 		vm.del_value();
@@ -91,7 +91,7 @@ static inline Value defineSimpleMethod(Fn &&fn) {
 
 template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<VirtualMachine &>(),std::declval<Value>(),std::declval<ValueList>()))>
 static inline Value defineAsyncMethod(Fn &&fn) {
-	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value obj, Value){
+	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, const Value &obj, const Value &){
 		auto params = vm.top_params();
 		vm.del_value();
 		fn(vm,obj, params);
@@ -99,8 +99,8 @@ static inline Value defineAsyncMethod(Fn &&fn) {
 }
 
 template<typename Fn, typename = decltype(std::declval<Fn>()(std::declval<VirtualMachine &>(), std::declval<ValueList>()))>
-static inline Value defineAsyncFunction1(Fn &&fn) {
-	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, Value, Value){
+static inline Value defineAsyncFunction(Fn &&fn) {
+	return defineFunction([fn = std::move(fn)](VirtualMachine &vm, const Value &, const Value &){
 		auto params = vm.top_params();
 		vm.del_value();
 		fn(vm,params);

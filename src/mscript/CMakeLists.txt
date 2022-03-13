@@ -13,6 +13,7 @@ add_library (mscript
 	arrbld.cpp
 	procarr.cpp
 	generator.cpp
+	mathex.cpp
 )
 
 

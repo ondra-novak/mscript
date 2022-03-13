@@ -17,6 +17,7 @@
 #include "function.h"
 #include "vm_rt.h"
 #include "generator.h"
+#include "mathex.h"
 
 using mscript::VirtualMachine;
 
@@ -185,6 +186,8 @@ static Value rt = json::Object {
 		{"PI",std::acos(0.0)*2},
 		{"SQRT1_2",std::sqrt(0.5)},
 		{"SQRT2",std::sqrt(2)},
+		{"INF",std::numeric_limits<double>::infinity()},
+		{"EPSILON",std::numeric_limits<double>::epsilon()},
 		{"abs",defineSimpleFn([](ValueList params){return std::abs(params[0].getNumber());})},
 		{"acos",defineSimpleFn([](ValueList params){return std::acos(params[0].getNumber());})},
 		{"acosh",defineSimpleFn([](ValueList params){return std::acosh(params[0].getNumber());})},
@@ -232,6 +235,17 @@ static Value rt = json::Object {
 		{"sqrt",defineSimpleFn([](ValueList params){return std::sqrt(params[0].getNumber());})},
 		{"tan",defineSimpleFn([](ValueList params){return std::tan(params[0].getNumber());})},
 		{"trunc",defineSimpleFn([](ValueList params){return std::trunc(params[0].getNumber());})},
+		{"isfinite",defineSimpleFn([](ValueList params){return std::isfinite(params[0].getNumber());})},
+		{"isNaN",defineSimpleFn([](ValueList params){return std::isnan(params[0].getNumber());})},
+		{"erf",defineSimpleFn([](ValueList params){return std::erf(params[0].getNumber());})},
+		{"erfc",defineSimpleFn([](ValueList params){return std::erfc(params[0].getNumber());})},
+		{"tgamma",defineSimpleFn([](ValueList params){return std::tgamma(params[0].getNumber());})},
+		{"lgamma",defineSimpleFn([](ValueList params){return std::lgamma(params[0].getNumber());})},
+		{"expint",defineSimpleFn([](ValueList params){return std::expint(params[0].getNumber());})},
+		{"beta",defineSimpleFn([](ValueList params){return std::beta(params[0].getNumber(),params[1].getNumber());})},
+		{"lcm",defineSimpleFn([](ValueList params){return std::lcm(params[0].getInt(),params[1].getInt());})},
+		{"integral",defineAsyncFunction(mathIntegral)},
+
 	}},
 	{"Array",json::Object {
 		{"push_back",defineSimpleMethod([](Value obj, ValueList params){for (Value z: params) {obj = arrayPushBack(obj, z);} return obj;})},
