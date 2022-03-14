@@ -349,7 +349,7 @@ protected:
 		run_exception
 	};
 
-	RunMode run_mode;
+	RunMode run_mode = RunMode::run_reset;
 
 	AbstractTask *curTask;
 

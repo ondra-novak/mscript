@@ -26,6 +26,20 @@ namespace mscript {
 		void finishJumpHere(std::size_t jmpPos, int sz);
 		void finishJumpTo(std::size_t jmpPos, std::size_t targetPos, int sz);
 		void markLine(std::size_t ln);
+
+		struct BreakInfo {
+			std::vector<std::size_t> jumps;
+		};
+
+		std::vector<BreakInfo> breaks;
+		void push_break();
+		BreakInfo pop_break();
+		bool regBreakJumpAddress(std::size_t addr);
+
+		template<typename Fn>
+		void buildBreakPart(Fn &&fn);
+
+
 	};
 
 
@@ -480,6 +494,21 @@ namespace mscript {
 		PNode expr;
 		PNode baseObj;
 		PValueListNode vlist;
+	};
+
+	class IsDefDoubleQuoteNode: public Expression {
+	public:
+		IsDefDoubleQuoteNode(PNode &&expr,PNode &&next);
+		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
+	public:
+		PNode expr;
+		PNode next;
+	};
+
+	class BreakNode: public ConstantLeaf {
+	public:
+		virtual void generateExpression(BlockBld &blk) const override;
 	};
 }
 

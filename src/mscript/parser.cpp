@@ -55,6 +55,7 @@ json::NamedEnum<Symbol> strKeywords({
 	{Symbol::kw_true,"true"},
 	{Symbol::kw_false,"false"},
 	{Symbol::kw_null,"null"},
+	{Symbol::kw_break,"break"},
 	{Symbol::kw_undefined,"undefined"},
 	{Symbol::kw_and,"and"},
 	{Symbol::kw_or,"or"},

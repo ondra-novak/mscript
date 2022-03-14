@@ -77,6 +77,7 @@ protected:
 	PNode compileBlock();
 	PNode compileCommand();
 	PNode compileExpression();
+	PNode compileTernal();
 	PNode compileRange();
 	PNode compileCustomBinary();
 	PNode compileAnd();

@@ -186,8 +186,9 @@ use A
 <tr><td>5</td><td> in, <custom> </td><td>Test, zda proměnná je součástí objektu (A in B), uživatelem definované operátory </td></tr>
 <tr><td>6</td><td> ==,>=,<=,<>,!=,>,<,= </td><td>Porovnávání</td></tr>
 <tr><td>7</td><td> and </td><td>Logický součin</td></tr>
+<tr><td>8</td><td> ?? </td><td>A??B - A pokud je definovane, jinak B</td></tr>
 <tr><td>8</td><td> or </td><td>Logický součet</td></tr>
-<tr><td>9</td><td> ?:, ?? </td><td>Termární operátor A?B:C, isdefined A??B (použije A pokud existuje, jinak B)</td></tr>
+<tr><td>9</td><td> ?:, </td><td>Ternární operátor A?B:C</td></tr>
 </table>
 
 
@@ -289,7 +290,7 @@ switch (X) {
 
 ### Smyčka for
 
-Smyčka for prochází kontejner (pole, objekt) a provádí kód pro každý prvek. Příkaz napodobuje provádění cyklu rekurzí, přestože rekurzivně se fyzicky neprovádí. Pro každý cyklus jsou k dispozici proměnné deklarované v předchozím cyklu. V tomto cyklu lze proměnné deklarovat znova a využít k proměnné z předchozího cyklu. Tím dochází "virtuálně" k přepsání proměnné. Před prvním cyklu jsou proměnné nastavené podle <init> části
+Smyčka for prochází kontejner (pole, objekt) a provádí kód pro každý prvek. Příkaz napodobuje provádění cyklu rekurzí, přestože rekurzivně se fyzicky neprovádí. Pro každý cyklus jsou k dispozici proměnné deklarované v předchozím cyklu. V tomto cyklu lze proměnné deklarovat znova a využít k proměnné z předchozího cyklu. Tím dochází "virtuálně" k přepsání proměnné. Před prvním cyklu jsou proměnné nastavené podle `<init>` části
 
 ```
 for (<iterator>: <konteiner>, <init>)(
@@ -334,7 +335,7 @@ faktorial=(while(N>1) {
 #Pozor že proměnné F a N se mění jen uvnitř bloku
 ```
 
-Stejně jako u smyčky F, cyklus while napodobuje rekurzivní vykonávání tím, že v každém novém průchodu jsou k dispozici proměnné z předchozího průchodu a lze je tedy deklarovat znovu a tím je modifikovat. Příkaz vrací stav proměnných po vykonání posledního průchodu jako objekt. Pokud cyklus neproběhl ani jednou, výsledkem je `null`
+Stejně jako u smyčky `for`, cyklus while napodobuje rekurzivní vykonávání tím, že v každém novém průchodu jsou k dispozici proměnné z předchozího průchodu a lze je tedy deklarovat znovu a tím je modifikovat. Příkaz vrací stav proměnných po vykonání posledního průchodu jako objekt. Pokud cyklus neproběhl ani jednou, výsledkem je `null`
 
 ### Deklarace funkce a bloku
 
@@ -458,7 +459,7 @@ obj3=object obj2 {
 Operátor tečka `.` se použije jako dereference 
 
 ```
-foo.bar``
+foo.bar
 ```
 
 Derefernci lze provést i pomocí indexu s použitím řetězcové hodnoty
@@ -514,7 +515,7 @@ B=with obj {
 	
 ```
 
-#### clousure
+#### closure
 
 Funkci lze přetvořit v objekt, pak je vznikne closure
 
@@ -526,7 +527,7 @@ fn=object (x)=>{
 }
 ```
 
-Proměnná `fn` je v tomto případě objekt, který je zároveň callable, tedy může být zavolán jako funkce. Uvnitř bloku funkce má k dispozici sebe sama jako scope a může tedy používat proměnné toho scope
+Proměnná `fn` je v tomto případě objekt, který je zároveň funkcí, tedy může být zavolán jako funkce. Uvnitř bloku funkce má k dispozici sebe sama jako scope a může tedy používat proměnné toho scope
 
 
 Pokud je funkce zároveň metoda, pak proměnné samotného objektu mají nižší prioritu před closure

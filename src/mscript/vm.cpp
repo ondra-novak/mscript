@@ -32,10 +32,20 @@ bool VirtualMachine::run() {
 	return false;
 }
 
+class EmptyTask: public AbstractTask {
+public:
+	virtual bool init(VirtualMachine &vm)override {return false;}
+	virtual bool run(VirtualMachine &vm) override {return false;}
+
+};
+
+static EmptyTask emptyTask;
+
 bool VirtualMachine::run_reset() {
 	taskStack.clear();
 	calcStack.clear();
 	exp = nullptr;
+	curTask = &emptyTask;
 	return run_add_task();
 }
 void VirtualMachine::prepare_all_tasks() {

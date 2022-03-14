@@ -237,7 +237,6 @@ PNode Compiler::compileValue() {
 
 PNode Compiler::parseIfElse() {
 	PNode cond = compileValue();
-	checkBeginBlock();
 	PNode blk1 = compileBlockOrExpression();
 	bool eat = eatSeparators();
 	if (next().symbol == Symbol::kw_else) {
@@ -504,6 +503,15 @@ PNode Compiler::tryCompileAssgn() {
 
 
 PNode Compiler::compileExpression() {
+	auto s = next();
+	if (s.symbol == Symbol::kw_break) {
+		commit();
+		return std::make_unique<BreakNode>();
+	} else {
+		return compileTernal();
+	}
+}
+PNode Compiler::compileTernal() {
 	PNode nd1 = compileOr();
 	auto s = next();
 	if (s.symbol == Symbol::s_questionmark) {
@@ -541,6 +549,9 @@ PNode Compiler::compileAnd() {
 	if (next().symbol == Symbol::kw_and) {
 		commit();
 		return std::make_unique<BooleanAndOrNode>(std::move(nd), compileAnd(), true);
+	}else if (next().symbol == Symbol::s_dblq) {
+		commit();
+		return std::make_unique<IsDefDoubleQuoteNode>(std::move(nd), compileAnd());
 	} else {
 		return nd;
 	}

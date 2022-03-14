@@ -55,6 +55,7 @@ enum class Symbol {
 	kw_with,        //with A {.... block ....}
 	kw_object,		//object {.... block ....}, object A {.... block ....}
 	kw_return,      //return A - exit block
+	kw_break,		//break cycle
 	kw_if,			//if A {....}
 	kw_else,        //else {....}, else if {....}
 	kw_true,

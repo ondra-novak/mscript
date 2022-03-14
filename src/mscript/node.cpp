@@ -5,6 +5,34 @@
 
 namespace mscript {
 
+void BlockBld::push_break() {
+	breaks.emplace_back();
+}
+
+BlockBld::BreakInfo BlockBld::pop_break() {
+	auto ret = breaks.back();
+	breaks.pop_back();
+	return ret;
+}
+
+bool BlockBld::regBreakJumpAddress(std::size_t addr) {
+	if (breaks.empty()) return false;
+	breaks.back().jumps.push_back(addr);
+	return true;
+}
+
+template<typename Fn> void BlockBld::buildBreakPart(Fn &&fn) {
+	auto brk = pop_break();
+	if (!brk.jumps.empty()) {
+		auto skp = prepareJump(Cmd::jump_1, 2);
+		for (const auto &x: brk.jumps) {
+			finishJumpHere(x, 2);
+		}
+		fn();
+		finishJumpHere(skp, 2);
+	}
+}
+
 BinaryOperation::BinaryOperation(PNode &&left, PNode &&right, Cmd instruction)
 	:left(std::move(left)),right(std::move(right)),instruction(instruction) {}
 
@@ -167,32 +195,52 @@ void KwWithNode::pushScope(BlockBld &blk) const {
 void KwWithNode::generateExpression(BlockBld &blk) const {
 	nd_object->generateExpression(blk);
 	pushScope(blk);
+	blk.push_break();
 	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::pop_scope);
+	blk.buildBreakPart([&]{
+		blk.pushCmd(Cmd::pop_scope);
+		BreakNode().generateExpression(blk);
+	});
 }
 
 
 void KwExecNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(Cmd::push_scope);
+	blk.push_break();
 	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::pop_scope);
+	blk.buildBreakPart([&]{
+		blk.pushCmd(Cmd::pop_scope);
+		BreakNode().generateExpression(blk);
+	});
 }
 
 void KwExecObjectNode::generateExpression(BlockBld &blk) const {
 	nd_object->generateExpression(blk);  //<block> <object>
 	pushScope(blk);
+	blk.push_break();
 	ExecNode::generateExpression(blk);
 	BlockNode::optimizeStoreDel(blk);
 	blk.pushCmd(Cmd::scope_to_object);	 //convert scope to object <return value is object>
 	blk.pushCmd(Cmd::pop_scope);		 //pop scope
+	blk.buildBreakPart([&]{
+		blk.pushCmd(Cmd::pop_scope);
+		BreakNode().generateExpression(blk);
+	});
 }
 
 void KwExecNewObjectNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(Cmd::push_scope);
+	blk.push_break();
 	ExecNode::generateExpression(blk);
 	BlockNode::optimizeStoreDel(blk);
 	blk.pushCmd(Cmd::scope_to_object);
 	blk.pushCmd(Cmd::pop_scope);
+	blk.buildBreakPart([&]{
+		blk.pushCmd(Cmd::pop_scope);
+		BreakNode().generateExpression(blk);
+	});
 }
 
 IfElseNode::IfElseNode(PNode &&cond, PNode &&nd_then, PNode &&nd_else)
@@ -434,6 +482,7 @@ void ForLoopNode::generateExpression(BlockBld &blk) const {
 	}
 	// <scope>
 	container->generateExpression(blk);
+	blk.push_break();
 	// <scope><container>
 	blk.pushCmd(Cmd::push_zero_int);
 	// <scope><container><idx>
@@ -459,6 +508,14 @@ void ForLoopNode::generateExpression(BlockBld &blk) const {
 	blk.finishJumpHere(jpout, 2);	//<scope><container><idx>
 	blk.pushCmd(Cmd::del);			//<scope><container>
 	blk.pushCmd(Cmd::del);			//<scope>
+	blk.buildBreakPart([&]{
+		blk.pushCmd(Cmd::del);			//<scope><container>
+		blk.pushCmd(Cmd::del);			//<scope>
+		blk.pushCmd(Cmd::del);			//
+		blk.pushCmd(Cmd::scope_to_object);	//<scope><container><idx><scope>
+		blk.pushCmd(Cmd::pop_scope);
+	});
+
 
 }
 
@@ -467,10 +524,12 @@ WhileLoopNode::WhileLoopNode(PNode &&condition, PNode &&block):ExecNode(std::mov
 
 void WhileLoopNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(Cmd::push_null);		//<scope>
+	blk.push_break();
 	condition->generateExpression(blk); //<condition>
 	auto skp = blk.prepareJump(Cmd::jump_false_1, 2);
 	auto rephere = blk.code.size();
 	blk.pushCmd(Cmd::push_scope_object);	//
+	blk.push_break();
 	ExecNode::generateExpression(blk);		//<retval>
 	BlockNode::optimizeStoreDel(blk);		//
 	blk.pushCmd(Cmd::scope_to_object);		//<scope>
@@ -478,6 +537,14 @@ void WhileLoopNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(Cmd::pop_scope);
 	blk.finishJumpTo(blk.prepareJump(Cmd::jump_true_1, 2), rephere, 2); //<scope>
 	blk.finishJumpHere(skp, 2);
+	blk.buildBreakPart([&]{
+		blk.pushCmd(Cmd::scope_to_object);		//<scope>
+		blk.pushCmd(Cmd::pop_scope);
+	});
+	blk.buildBreakPart([&]{
+		blk.pushCmd(Cmd::del);
+	});
+
 }
 
 
@@ -672,6 +739,7 @@ SwitchCaseNode::SwitchCaseNode(PNode &&selector, Labels &&labels, Nodes &&nodes,
 	:selector(std::move(selector)), labels(std::move(labels)),nodes(std::move(nodes)),defNode(std::move(defaultNode)) {}
 
 void SwitchCaseNode::generateExpression(BlockBld &blk) const {
+	blk.push_break();
 	selector->generateExpression(blk);
 	std::vector<std::size_t> lbofs;
 	std::vector<std::size_t> begins;
@@ -699,6 +767,9 @@ void SwitchCaseNode::generateExpression(BlockBld &blk) const {
 		blk.finishJumpTo(lbofs[i], begins[l.second], 2);
 		i++;
 	}
+	blk.buildBreakPart([&]{
+		throw BuildError("Command 'break' is not allowed inside of 'switch'");
+	});
 
 }
 
@@ -827,6 +898,42 @@ CastMethodCallNode::CastMethodCallNode(PNode &&expr, PNode &&baseObj, std::vecto
 
 void CastMethodCallNode::generateListVars(VarSet &vars) const {
 	vars.insert(Value(nullptr));
+}
+
+IsDefDoubleQuoteNode::IsDefDoubleQuoteNode(PNode &&expr, PNode &&next):expr(std::move(expr)),next(std::move(next)) {
+}
+
+void IsDefDoubleQuoteNode::generateExpression(BlockBld &blk) const {
+	auto z= dynamic_cast<const Identifier *>(expr.get());
+	if (z) {
+		blk.pushInt(blk.pushConst(z->getName()), Cmd::is_def_1,2);
+		auto elsejmp = blk.prepareJump(Cmd::jump_false_1, 2);
+		blk.pushInt(blk.pushConst(z->getName()), Cmd::get_var_1,2);
+		auto thenjmp = blk.prepareJump(Cmd::jump_1, 2);
+		blk.finishJumpHere(elsejmp, 2);
+		next->generateExpression(blk);
+		blk.finishJumpHere(thenjmp, 2);
+	} else {
+		expr->generateExpression(blk);
+		blk.pushCmd(Cmd::dup);
+		blk.pushCmd(Cmd::is_def);
+		auto directjmp = blk.prepareJump(Cmd::jump_true_1, 2);
+		blk.pushCmd(Cmd::del);
+		next->generateExpression(blk);
+		blk.finishJumpHere(directjmp, 2);
+	}
+}
+
+void IsDefDoubleQuoteNode::generateListVars(VarSet &vars) const {
+	expr->generateListVars(vars);
+	next->generateListVars(vars);
+}
+
+void BreakNode::generateExpression(BlockBld &blk) const {
+	auto out = blk.prepareJump(Cmd::jump_1, 2);
+	if (!blk.regBreakJumpAddress(out)) {
+		blk.code.resize(blk.code.size()-3);
+	}
 }
 
 }
