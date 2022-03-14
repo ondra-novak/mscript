@@ -112,8 +112,7 @@ PNode Compiler::compileValue() {
 	case Symbol::identifier:			//can be value or function call
 		out = std::make_unique<Identifier>(s.data);
 		commit();
-		if (next().symbol == Symbol::s_arrow) out = compileDefineFunction(std::move(out));
-		else out = std::move(out);
+		if (next().symbol == Symbol::s_arrow) return  compileDefineFunction(std::move(out));
 		break;
 	case Symbol::number:
 		out = compileNumber();
@@ -171,12 +170,12 @@ PNode Compiler::compileValue() {
 	case Symbol::s_left_bracket:
 		commit();
 		out = compileValueList();
-		if (next().symbol == Symbol::s_arrow) out = compileDefineFunction(std::move(out));
+		if (next().symbol == Symbol::s_arrow) return compileDefineFunction(std::move(out));
 		break;
 	case Symbol::s_left_brace:
 		commit();
 		out = compileBlock();
-		out = std::make_unique<BlockValueNode>(packToValue(buildCode(out, {loc.file, loc.line+curLine})), std::move(out));
+		return std::make_unique<BlockValueNode>(packToValue(buildCode(out, {loc.file, loc.line+curLine})), std::move(out));
 		break;
 	case Symbol::s_exclamation:
 		commit();
@@ -223,6 +222,7 @@ PNode Compiler::compileValue() {
 			Value v = expressionToConst();
 			if (v.type() == json::number) out = std::make_unique<NumberNode>(v);
 			else out = std::make_unique<ValueNode>(v);
+			return out;
 		}
 		break;
 	default:

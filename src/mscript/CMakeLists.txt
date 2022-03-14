@@ -14,6 +14,7 @@ add_library (mscript
 	procarr.cpp
 	generator.cpp
 	mathex.cpp
+	scope.cpp
 )
 
 

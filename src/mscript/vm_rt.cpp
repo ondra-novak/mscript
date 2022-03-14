@@ -243,6 +243,7 @@ static Value rt = json::Object {
 		{"lgamma",defineSimpleFn([](ValueList params){return std::lgamma(params[0].getNumber());})},
 		{"expint",defineSimpleFn([](ValueList params){return std::expint(params[0].getNumber());})},
 		{"beta",defineSimpleFn([](ValueList params){return std::beta(params[0].getNumber(),params[1].getNumber());})},
+		{"gcd",defineSimpleFn([](ValueList params){return std::gcd(params[0].getInt(),params[1].getInt());})},
 		{"lcm",defineSimpleFn([](ValueList params){return std::lcm(params[0].getInt(),params[1].getInt());})},
 		{"integral",defineAsyncFunction(mathIntegral)},
 
@@ -291,7 +292,7 @@ static Value rt = json::Object {
 		if (!isFunction(fn)) throw std::runtime_error("vtarray - the second argument must be a function");
 		return packProcArray(fn, size.getUInt());
 	})},
-	{"typeof",defineSimpleFn([](ValueList params){return strTypeClasses[params[0].type()];})},
+	{"typeof",defineSimpleFn([](ValueList params){return getTypeClass(params[0]);})},
 	{"keyof",defineSimpleFn([](ValueList params){return params[0].getKey();})},
 	{"strip_key",defineSimpleFn([](ValueList params){return params[0].stripKey();})},
 

@@ -12,26 +12,6 @@
 
 namespace mscript {
 
-
-void Scope::init(Value base){
-	this->base = base;
-	items.clear();
-}
-
-
-Value Scope::convertToObject() const {
-	json::Object obj(base);
-	for (const auto &x: items) {
-		obj.set(x.name, x.value);
-	}
-	if (isFunction(base)) {
-		return repackFunction(base, obj);
-	} else {
-		return obj;
-	}
-
-}
-
 void VirtualMachine::setGlobalScope(Value globalScope) {
 	this->globalScope = globalScope;
 }
@@ -216,30 +196,6 @@ bool VirtualMachine::pop_scope() {
 	scopeStack.pop_back();
 	return true;
 }
-
-bool Scope::get(const std::string_view &name, Value &out) const {
-	auto iter = std::find_if(items.begin(), items.end(), [&](const Variable &v){return v.name == name;});
-	if (iter == items.end()) {
-		out = base[name];
-		return out.getKey() == name;
-	}
-	else {
-		out = iter->value;
-		return true;
-	}
-}
-
-
-bool Scope::set(const std::string_view &name, const Value &v) {
-	return set(Value(name),v);
-}
-bool Scope::set(const Value &name, const Value &v) {
-	auto n = name.getString();
-	if (std::find_if(items.begin(), items.end(), [&](const Variable &v){return v.name == n;}) != items.end()) return false;
-	items.push_back(Variable(name, v));
-	return true;
-}
-
 Value VirtualMachine::top_value() const {
 	return calcStack.empty()?Value():ValueList(calcStack.back()).toValue();
 }

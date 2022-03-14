@@ -191,10 +191,13 @@ static int run(CmdArgIter &iter, bool debug) {
 							}
 						}
 						for (const auto &vr: x) {
-							if (v[vr.name].defined()) std::cout << "*";
-							std::cout << vr.name << "=";
-							printValue(vr.value);
-							std::cout << " ";
+							if (vr.has_value()) {
+								const auto &var = *vr;
+								if (v[var.name.getString()].defined()) std::cout << "*";
+								std::cout << var.name.getString() << "=";
+								printValue(var.value);
+								std::cout << " ";
+							}
 						}
 						std::cout << std::endl;
 					}

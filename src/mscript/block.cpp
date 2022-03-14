@@ -8,7 +8,8 @@
 #include <cmath>
 #include <imtjson/serializer.h>
 #include <imtjson/string.h>
-#include <mscript/procarr.h>
+#include "arrbld.h"
+#include "procarr.h"
 #include "range.h"
 #include "block.h"
 #include "function.h"
@@ -319,12 +320,12 @@ json::Value BlockExecution::deref(VirtualMachine &vm, Value src, Value idx) {
 			if (r.defined()) return r;
 			Value clsItem = src[""];
 			if (clsItem.type() != json::object) {
-				if (!vm.get_var(strTypeClasses[src.type()], clsItem)) return json::undefined;
+				if (!vm.get_var(getTypeClass(src), clsItem)) return json::undefined;
 			}
 			return clsItem[idx.getString()];
 		} else {
 			Value clsItem;
-			if (!vm.get_var(strTypeClasses[src.type()], clsItem)) return json::undefined;
+			if (!vm.get_var(getTypeClass(src), clsItem)) return json::undefined;
 			return clsItem[idx.getString()];
 		}
 	}
@@ -510,7 +511,7 @@ Value BlockExecution::op_add(const Value &a, const Value &b) {
 		case json::string: return json::String({a.toString(),b.toString()});
 		case json::array:if (b.type() == json::number)
 						    return newDynMap(a, [b](const Value &x){return op_add(x,b);});
-							else return a.merge(b);
+							else return Value(json::PValue(new ArrBldNode(a.getHandle(),b.getHandle())));
 		case json::object: return a.merge(b);
 		default: return nullptr;
 	}

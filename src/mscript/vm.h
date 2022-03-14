@@ -11,11 +11,12 @@
 #include <chrono>
 #include <imtjson/object.h>
 #include <imtjson/value.h>
-#include <mscript/param_pack.h>
 #include <shared/refcnt.h>
 
 #include "value.h"
 #include "codelocation.h"
+#include "scope.h"
+#include "param_pack.h"
 
 namespace mscript {
 
@@ -87,35 +88,6 @@ std::unique_ptr<AbstractTask> createCallbackTask(Fn &&fn) {
 	return std::make_unique<CB>(std::forward<Fn>(fn));
 }
 
-class Scope {
-public:
-	void init(Value base);
-	Value getBase() const {return base;}
-
-	Value convertToObject() const;
-
-	bool set(const Value &name, const Value &v);
-	bool set(const std::string_view &name, const Value &v);
-	bool get(const std::string_view &name, Value &out) const;
-
-	struct Variable {
-		std::string_view name;
-		json::Value vname;
-		json::Value value;
-		Variable(json::Value vname, json::Value value):name(vname.getString()), vname(vname), value(value) {}
-	};
-
-	auto begin() const {return items.begin();}
-	auto end() const {return items.end();}
-	auto find(const std::string_view &key)  const {
-		return std::find_if(begin(), end(), [&](const Variable &v){return v.name == key;});
-	}
-
-protected:
-
-	Value base;
-	std::vector<Variable> items;
-};
 
 
 class VirtualMachine {

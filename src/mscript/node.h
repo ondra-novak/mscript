@@ -342,6 +342,9 @@ namespace mscript {
 		BlockNode(std::vector<PNode> &&code);
 		virtual void generateExpression(BlockBld &blk) const override;
 		virtual void generateListVars(VarSet &vars) const override;
+
+		static void optimizeStoreDel(BlockBld &blk);
+
 	protected:
 		std::vector<PNode> code;
 	};

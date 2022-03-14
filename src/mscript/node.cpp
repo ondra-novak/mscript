@@ -359,6 +359,17 @@ Block buildCode(const PNode &nd, const CodeLocation &loc) {
 	};
 }
 
+void BlockNode::optimizeStoreDel(BlockBld &blk) {
+	if (blk.lastStorePos) {
+		constexpr auto diff = static_cast<int>(Cmd::pop_var_1)-static_cast<int>(Cmd::set_var_1);
+		blk.code[blk.lastStorePos]+=diff;
+		blk.lastStorePos = 0;
+	} else {
+		blk.pushCmd(Cmd::del);
+	}
+
+}
+
 void BlockNode::generateExpression(BlockBld &blk) const {
 	if (code.empty()) {
 		blk.pushCmd(Cmd::push_null); //block must return a value - empty block returns null
@@ -368,13 +379,7 @@ void BlockNode::generateExpression(BlockBld &blk) const {
 		(*iter)->generateExpression(blk);
 		++iter;
 		while (iter != end) {
-			if (blk.lastStorePos) {
-				constexpr auto diff = static_cast<int>(Cmd::pop_var_1)-static_cast<int>(Cmd::set_var_1);
-				blk.code[blk.lastStorePos]+=diff;
-				blk.lastStorePos = 0;
-			} else {
-				blk.pushCmd(Cmd::del);
-			}
+			optimizeStoreDel(blk);
 			(*iter)->generateExpression(blk);
 			++iter;
 		}
@@ -416,7 +421,6 @@ ForLoopNode::ForLoopNode(Value iterator, PNode &&container, std::vector<std::pai
 
 
 void ForLoopNode::generateExpression(BlockBld &blk) const {
-	blk.pushCmd(Cmd::push_null); //<ret>
 	if (init.empty()) {
 		blk.pushCmd(Cmd::push_null);
 	} else {
@@ -428,35 +432,33 @@ void ForLoopNode::generateExpression(BlockBld &blk) const {
 		blk.pushCmd(Cmd::scope_to_object);
 		blk.pushCmd(Cmd::pop_scope);
 	}
-	// <ret><scope>
+	// <scope>
 	container->generateExpression(blk);
-	// <ret><scope><container>
+	// <scope><container>
 	blk.pushCmd(Cmd::push_zero_int);
-	// <ret><scope><container><idx>
+	// <scope><container><idx>
 	auto label = blk.code.size();
-	blk.pushInt(1, Cmd::dup_1, 1);  //<ret><scope><container><idx><container>
-	blk.pushInt(1, Cmd::dup_1, 1);	//<ret><scope><container><idx><container><idx>
-	blk.pushCmd(Cmd::op_checkbound); //<ret><scope><container><idx><bool>
+	blk.pushInt(1, Cmd::dup_1, 1);  //<scope><container><idx><container>
+	blk.pushInt(1, Cmd::dup_1, 1);	//<scope><container><idx><container><idx>
+	blk.pushCmd(Cmd::op_checkbound); //<scope><container><idx><bool>
 	auto jpout = blk.prepareJump(Cmd::jump_false_1, 2); //<ret><scope><container><idx>
-	blk.pushInt(2, Cmd::dup_1, 1);	//<ret><scope><container><idx><scope>
-	blk.pushCmd(Cmd::push_scope_object); //<ret><scope><container><idx>
-	blk.pushInt(1, Cmd::dup_1, 1);  //<ret><scope><container><idx><container>
-	blk.pushInt(1, Cmd::dup_1, 1);	//<ret><scope><container><idx><container><idx>
-	blk.pushCmd(Cmd::deref);		//<ret><scope><container><idx><value>
-	blk.pushInt(blk.pushConst(iterator), Cmd::pop_var_1, 2); //<ret><scope><container><idx>
-	ExecNode::generateExpression(blk);	//generate block execution <ret><scope><container><idx><ret>
-	blk.pushInt(4, Cmd::swap_1, 1);		//swap old ret with new ret
-	blk.pushCmd(Cmd::del);				//<ret><scope><container><idx>
-	blk.pushCmd(Cmd::scope_to_object);	//generate block execution <ret><scope><container><idx><scope>
+	blk.pushInt(2, Cmd::dup_1, 1);	//<scope><container><idx><scope>
+	blk.pushCmd(Cmd::push_scope_object); //<scope><container><idx>
+	blk.pushInt(1, Cmd::dup_1, 1);  //<scope><container><idx><container>
+	blk.pushInt(1, Cmd::dup_1, 1);	//<scope><container><idx><container><idx>
+	blk.pushCmd(Cmd::deref);		//<scope><container><idx><value>
+	blk.pushInt(blk.pushConst(iterator), Cmd::pop_var_1, 2); //<scope><container><idx>
+	ExecNode::generateExpression(blk);	//generate block execution <scope><container><idx><ret>
+	BlockNode::optimizeStoreDel(blk);	//<scope><container><idx> - return value is ignored
+	blk.pushCmd(Cmd::scope_to_object);	//<scope><container><idx><scope>
 	blk.pushCmd(Cmd::pop_scope);
 	blk.pushInt(3, Cmd::swap_1, 1);	//swap old scope with new scope
-	blk.pushCmd(Cmd::del);			//<ret><scope><container><idx>
-	blk.pushInt(1,Cmd::op_add_const_1,8); //<ret><scope><container><idx+1>
+	blk.pushCmd(Cmd::del);			//<scope><container><idx>
+	blk.pushInt(1,Cmd::op_add_const_1,8); //<scope><container><idx+1>
 	blk.finishJumpTo(blk.prepareJump(Cmd::jump_1, 2), label,2);
-	blk.finishJumpHere(jpout, 2);	//<ret><scope><container><idx>
-	blk.pushCmd(Cmd::del);			//<ret><scope><container>
-	blk.pushCmd(Cmd::del);			//<ret><scope>
-	blk.pushCmd(Cmd::del);			//<ret>
+	blk.finishJumpHere(jpout, 2);	//<scope><container><idx>
+	blk.pushCmd(Cmd::del);			//<scope><container>
+	blk.pushCmd(Cmd::del);			//<scope>
 
 }
 
@@ -464,19 +466,17 @@ WhileLoopNode::WhileLoopNode(PNode &&condition, PNode &&block):ExecNode(std::mov
 }
 
 void WhileLoopNode::generateExpression(BlockBld &blk) const {
-	blk.pushCmd(Cmd::push_null);		//<retval>
-	condition->generateExpression(blk); //<retval> <condition>
+	blk.pushCmd(Cmd::push_null);		//<scope>
+	condition->generateExpression(blk); //<condition>
 	auto skp = blk.prepareJump(Cmd::jump_false_1, 2);
-	blk.pushCmd(Cmd::push_null);		//<retval> <scope>
 	auto rephere = blk.code.size();
-	blk.pushCmd(Cmd::push_scope_object);	//<retval>
-	blk.pushCmd(Cmd::del);					//
+	blk.pushCmd(Cmd::push_scope_object);	//
 	ExecNode::generateExpression(blk);		//<retval>
-	blk.pushCmd(Cmd::scope_to_object);		//<retval> <scope>
-	condition->generateExpression(blk);		//<retval> <scope> <condition>
+	BlockNode::optimizeStoreDel(blk);		//
+	blk.pushCmd(Cmd::scope_to_object);		//<scope>
+	condition->generateExpression(blk);		//<scope> <condition>
 	blk.pushCmd(Cmd::pop_scope);
-	blk.finishJumpTo(blk.prepareJump(Cmd::jump_true_1, 2), rephere, 2); //<retval><scope>
-	blk.pushCmd(Cmd::del);					//<retval>
+	blk.finishJumpTo(blk.prepareJump(Cmd::jump_true_1, 2), rephere, 2); //<scope>
 	blk.finishJumpHere(skp, 2);
 }
 

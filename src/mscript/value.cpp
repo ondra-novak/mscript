@@ -5,6 +5,8 @@
  *      Author: ondra
  */
 
+#include "block.h"
+#include "function.h"
 #include "value.h"
 
 namespace mscript {
@@ -18,5 +20,15 @@ json::NamedEnum<json::ValueType> strTypeClasses ( {
 		{json::array,"Array"},
 		{json::object,"Object"},
 });
+
+std::string_view getTypeClass(const Value &val) {
+	if (isNativeType(val)) {
+		if (isFunction(val)) return "Function";
+		else if (isBlock(val)) return "Block";
+		else return "Native";
+	} else {
+		return strTypeClasses[val.type()];
+	}
+}
 
 }

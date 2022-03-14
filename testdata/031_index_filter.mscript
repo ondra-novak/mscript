@@ -1,0 +1,10 @@
+A=["ahoj","svete","nazdar","honzo","cau","lidi"]
+B=A[1..2]
+C=A[[0,2,4]]
+D=A[[3,2]]
+aa=[4,3,2,5]
+E=A+aa
+F=A[aa]
+G=A[(5..3)+(0..2)]
+
+(B,C,D,E,F,G)

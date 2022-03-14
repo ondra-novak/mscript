@@ -1,9 +1,7 @@
-exec {
-	A?=10
-	sum=0
-	(X)=while (A>0) {
-		(sum,A) = (sum+A,A-1)
-	}
-	
-	
-}
+A=10
+sum=0
+X=while (A>0) {
+	sum=sum+A
+	A=A-1
+}.sum
+

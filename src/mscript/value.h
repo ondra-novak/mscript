@@ -28,7 +28,8 @@ static inline bool isNativeType(const Value &val) {
 	return (wp != nullptr);
 }
 
-extern json::NamedEnum<json::ValueType> strTypeClasses;
+std::string_view getTypeClass(const Value &val);
+
 
 
 

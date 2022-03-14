@@ -1,0 +1,13 @@
+(
+typeof(1),
+typeof("ahoj"),
+typeof(object {X=1}),
+typeof([1,2,3]),
+typeof(true),
+typeof(false),
+typeof(null),
+typeof(undefined),
+typeof(x=>1),
+typeof({A=10}),
+typeof(object (x=>1) {y=1})
+)

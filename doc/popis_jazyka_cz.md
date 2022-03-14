@@ -45,19 +45,17 @@ A=20 #chyba
 Proměnné nemají typ, dokud nejsou přiřazeny. Nelze dopředu definovat typ proměnné. Jazyk nemá typovou kontrolu
 
 ## Datové typy
-
- - **čísla** - `1`,`25`,`3.14`,`-21.8`,`+10.25e6`,`4.8e-8` - interně se rozlišují celá čísla a čísla s plovoucí čárkou. Pokud jde matematická operace vyřešit v rámci celých čísel, ukládá se číslo jako celé, jinak je převedeno na číslo s plovoucí čárkou. Konstanta, která má být automaticky převedena na číslo s plovoucí čárkou musí mít uvedenou desetinnou tečku a aspoň jedno desetinné místo: `214.0` - je uloženo jako číslo s pohyblivou desetinnou čárkou. Pří zápisu čísel se ignorují bílé znaky (kromě znaku nové řádky), tedy lze mezerou oddělovat tisíce: `100 000`, `0.254 787`. 
- 
- - **řetězce** - `"Ahoj"`, `"Citace \"Ahoj\""`, `"Znak \\ zpětné lomítko"`, `"Nová\nřádka"`. Při zápisu řetězců platí stejná pravidla jako pro řetězce ve formátu JSON
- - **boolean** - konstanta **true** nebo **false**
- - **hodnota null** - null je považována za hodnotu. Proměnná nastavená na hodnotu null je považována za proměnnou mající hodnotu. Pokud proměnná není nastavena, pak je výsledkem **undefined**
- - **hodnota undefined** - objevuje se zejména tam, kde výsledkem operace není žádná hodnota.
- - **pole** - `[1,2,3,4,5...]` -Pole je indexováno od nuly a může obsahovat libovolný mix typů. Pole je immutabilní, nelze změnit hodnotu uvnitř pole, změna jakékoliv hodnoty znamená vytvoření kopie pole
- - **objekt** - `{"foo":10,"bar":true}` -  Objekty mají podobnou strukturu jako objekty JSONu. Objekty jsou immutabilní, objekt lze změnit jedině tak, že vznikne jeho kopie (která obsahuje změnu)
+ - **Number** - čísla - `1`,`25`,`3.14`,`-21.8`,`+10.25e6`,`4.8e-8` - interně se rozlišují celá čísla a čísla s plovoucí čárkou. Pokud jde matematická operace vyřešit v rámci celých čísel, ukládá se číslo jako celé, jinak je převedeno na číslo s plovoucí čárkou. Konstanta, která má být automaticky převedena na číslo s plovoucí čárkou musí mít uvedenou desetinnou tečku a aspoň jedno desetinné místo: `214.0` - je uloženo jako číslo s pohyblivou desetinnou čárkou. Pří zápisu čísel se ignorují bílé znaky (kromě znaku nové řádky), tedy lze mezerou oddělovat tisíce: `100 000`, `0.254 787`. 
+ - **String** - `"Ahoj"`, `"Citace \"Ahoj\""`, `"Znak \\ zpětné lomítko"`, `"Nová\nřádka"`. Při zápisu řetězců platí stejná pravidla jako pro řetězce ve formátu JSON
+ - **Boolean** - konstanta **true** nebo **false**
+ - **Null** - hodnota **null** je považována za hodnotu. Proměnná nastavená na hodnotu null je považována za proměnnou mající hodnotu. Pokud proměnná není nastavena, pak je výsledkem **undefined**
+ - **Undefined** - hodnota **undefined** - objevuje se zejména tam, kde výsledkem operace není žádná hodnota.
+ - **Array** - `[1,2,3,4,5...]` -Pole je indexováno od nuly a může obsahovat libovolný mix typů. Pole je immutabilní, nelze změnit hodnotu uvnitř pole, změna jakékoliv hodnoty znamená vytvoření kopie pole
+ - **Object** - `{"foo":10,"bar":true}` -  Objekty mají podobnou strukturu jako objekty JSONu. Objekty jsou immutabilní, objekt lze změnit jedině tak, že vznikne jeho kopie (která obsahuje změnu)
  - **seznam hodnot** - `(1,5,"test",true)` - Seznam hodnot se používá k předávání parametrů do funkcí, nebo vracení výsledku z funkce. Seznam hodnot nelze uložit do proměnné, při uložení se převede na pole. Pomocí operátor `...` lze převádět pole na seznam hodnot a naopak - viz popis param-packu
  - **rozsah** - Hodnota typu **rozsah** umožňuje definovat rozsah celočíselných hodnot, které se následně prezentuje jako pole po sobě jdoucích hodnot: `5..12`=`[5,6,7,8,9,10,11,12]`
- - **blok** - Část kódu, kterou lze samostatne spustit.
- - **callable** - Představuje hodnotu, kterou lze použít jako funkci - zavolat. Představuje funkce, metody, i objekty, které lze vyvolat jako funkci.
+ - **Block** - Část kódu, kterou lze samostatne spustit.
+ - **Function** - Představuje hodnotu, kterou lze použít jako funkci - zavolat. Představuje funkce, metody, i objekty, které lze vyvolat jako funkci.
 
 ## Scope a přiřazení do proměnných
 
@@ -145,21 +143,59 @@ B=(1,2,3,4)
 #B=[1,2,3,4]
 ```
 
+### Přiřazení výchozí hodnoty
 
-## Operátory
+```
+A?=10
+```
+Přířadí hodnotu, pokud proměnná není definovaná, jinak ponechá původní
 
-- `+`,`-`,`*`,`/` - matematické operátory, s obvyklou prioritou
-- `^` - operátor mocniny, má nejvyšší prioritu
-- `(`,`)` - závorky jak ve smyslu matematickém, tak ke konstrukcí seznamů hodnot
-- `,` - symbol čárky uvnitř závorek (...,...) odděluje výsledky v rámci seznamu hodnot
-- `{`,`}` - začátek a konec bloku
-- `[`,`]` - deklarace pole, nebo indexu v poli či proměnné v objektu
-- `=`,`>`,`<`,`!=`,`<=`,`>=`,`<>`,`==` - porovnávání. Operátory = a == oba mají význam porovnání v rámci výrazu. Nicméně operátor = může být zaměněn jako přiřazení u výrazu, která není přiřazením, pak použijte ==. Operátory != a <> mají stejný význam. Tyto operátory mají menší prioritu než matematické operátory
-- `and`, `or`, `not` - operátory logických operací operací, mají menší prioritu než porovnávání. `and` má vyšší prioritu než `or`
-- `..` - definice rozsahu A..B - má prioritu vyšší než porovnávání a nižší než matematické operace
-- `?:` - klasický operátor IF-ELSE v rámci výrazu, nejnižší priorita
-- `=>` - deklarace funkce
-- `...` - práce s param packem
+### Zakrytí proměnné 
+
+Pokud chceme zakrýt existující proměnnou z předchozího scope
+
+```
+A=undefined
+```
+
+Tato proměnná už nesmí být měněna ale ve vnořeném scope nebude viditelná
+
+### Zkopírování proměnné do aktuálního scope
+
+```
+use A
+```
+
+
+
+## Operátory a priorita
+
+<table>
+<tr><th> Priorita </th><th> Operatory </th><th> Význam </th><tr>
+<tr><td>0</td><td> unární +,- </td><td>Unární plus a mínus před číslem</td></tr>
+<tr><td>0</td><td> !,not </td><td>Logická negace</td></tr>
+<tr><td>0</td><td> ? </td><td>Operátor ? se píše před proměnnou ?A a testuje, zda je definovaná</td></tr>
+<tr><td>1</td><td> . </td><td>Dereference pole objektu</td></tr>
+<tr><td>1</td><td> [x] </td><td>Dereference</td></tr>
+<tr><td>1</td><td> -> </td><td>Přetypování a volání metody x->Objekt.metoda(...) </td></tr>
+<tr><td>1</td><td> => </td><td>Deklarace funkce (x)=>{...} </td></tr>
+<tr><td>2</td><td> ^ </td><td>Mocnina (X^2) </td></tr>
+<tr><td>2</td><td> *,/,% </td><td>Násobení, dělení, modulo </td></tr>
+<tr><td>3</td><td> +,- </td><td>Sčítání a odčítání </td></tr>
+<tr><td>4</td><td> .. </td><td>Definice rozsahu (A..B) </td></tr>
+<tr><td>5</td><td> in, <custom> </td><td>Test, zda proměnná je součástí objektu (A in B), uživatelem definované operátory </td></tr>
+<tr><td>6</td><td> ==,>=,<=,<>,!=,>,<,= </td><td>Porovnávání</td></tr>
+<tr><td>7</td><td> and </td><td>Logický součin</td></tr>
+<tr><td>8</td><td> or </td><td>Logický součet</td></tr>
+<tr><td>9</td><td> ?:, ?? </td><td>Termární operátor A?B:C, isdefined A??B (použije A pokud existuje, jinak B)</td></tr>
+</table>
+
+
+### Závorky
+- **()** - asociativita, deklarace seznamu hodnot (a,b,c), parametry funkce
+- **[]** - pole [1,2,3,4], index a[x]
+- **{}** - deklarace bloku {...code...}
+
 
 ## Struktura programu
 
@@ -535,4 +571,269 @@ object closure { # mění se aktuální closure
    foo=1
 }
 ```
+
+
+### Třídy
+
+Třídy jsou objekty. Jsou standardně definované pro všechny typy. 
+
+- funkce `typeof(x)` vrac jméno třídy pro daný type
+- Třída zpravidla přináší metody pro práci s typem. Tyto metody jsou dostupné i přes tečkový operátor i přesto, že na levé straně není objekt
+
+```
+A=[1,2,3]
+A.size()    # volá Array.size() nad proměnnou A
+
+#Result: 3
+```
+
+#### Předefinování metod v třídách. 
+
+Třídy se oslovují pomocí jména, proto je snadné předefinovat chování metod v třídách. Stačí vytvořit novou revizi třídy
+
+```
+Array=object Array {
+		neco=()=>{
+			#kod
+		}
+}
+```
+
+Nová definice je platná v tomto a ve všech vnořených scope
+
+
+#### Přetypování
+
+Při běžném zavolání metody se jako `this` předává objekt, jehož je metoda členem. Toto výchozí chování lze změnit použitím přetypování. Přetypování znamená zavolání metody z jiné třidy nad zadanou proměnnou bez ohledu na to, jakého je typu. K přetypování se používá operátor `->`
+
+```
+hodnota->Objekt.metoda(paramety)
+```
+
+```
+X=object {
+	A=1
+	B=true
+}
+X->Array.size()
+
+#Result: 2
+```
+
+Výše uvedený příklad funguje protože objekty lze adresovat jako pole, a proto existuje možnost přetypovat objekt na pole a zavolat metodu pole
+
+Přetypování lze použít k zavolání funkce jakoby šlo o metodu a předat ji this. Lze tedy vytvářet metody, které nejsou vázané na objekt
+
+```
+fn=()=>{   #obyčejná funkce
+  #kod
+}
+
+objekt->fn()  #zavolej funkci jako by to byla metoda, předej ji objekt
+```
+
+## Práce s poli
+
+### Objekt jako pole
+
+- Objekt lze použít jako pole. Jednotlivé položky jsou seřazený alfanumericky, tedy na indexu 0 bude pole které se podle jména řadí na první místo, atd...
+- Objekt lze také iterovat pomocí `for`. Získáme hodnoty
+- Při iteraci lze použít funkci `keyof(x]` k získání klíče
+- Objekt má definované [], použijeme řetězcovou hodnotu pro přístup k hodnotám podle jména
+
+
+### Velikost pole
+
+```
+pole.size()
+```
+
+### Indexace pole
+
+Pole lze indexovat číselným indexem v rozsahu mezi 0 až (velikost-1). Indexace mimo rozsah vrací `undefined`
+
+### Podrozsahy a mapování indexu
+
+Použití rozsahu `X..Y` lze získat část pole
+
+```
+A=[10,20,30,40,50]
+A[1..3]
+
+#Result: [20,30,40]
+```
+
+Jako index lze použít jiné pole celočíselných hodnot, pak lze vytvořit nové pole s přemapovanými indexy
+
+```
+A=[10,20,30,40,50]
+B=[0,2,4,2]
+A[B]
+
+#Result: [0,30,50,30]
+```
+
+Pozor, je rozdíl mezi A[1] a A[[1]]. V tom druhém případě je výsledkem jednoprvkové pole
+
+### Spojování polí
+
+Pole lze spojit pomocí operátoru `+`
+
+```
+A=[1,2,3]
+B=["X","Y","Z"]
+A+B
+#Result: [1,2,3,"X","Y","Z"]
+```
+### Mapování matematickou operací
+
+Pokud součástí matematické operace je pole a hodnota, pak se matematická operace aplikuje na všechny prvky pole za vzniku nového pole
+
+```
+A=[10,20,30]
+(A/2, A+5, 20-A)
+
+#Result: ([5,10,15], [15,25,35], [10,0,-10])
+```
+ 
+Matematické operace lze aplikovat i na rozsah (který se chová jako pole)
+
+```
+A=1..5
+A*2
+#Result: [2,4,6,8,10]
+```
+ 
+**Poznámka:** - operace má konstantní složitost, matematická operace je forma líného mapování, ke skutečnému výpočtu dochází až při přístupu k prvkům
+
+### Modifikace pole
+
+Vkládání do polí uvnitř lze řešit pomocí poskládání částí polí do nového pole
+
+**Poznámka** - Všechny operace jsou řešeny jako forma mapování. Po aplikaci všech operací je vhodné zavolat metodu copy(), která "zapeče" veškeré mapovací operace do nového pole
+
+```
+A=[1,2,3,4,5]
+B=["ahoj","nazdar"]
+C=A[0..2]+B+A[3..4]
+
+#Result: [1,2,3,"ahoj","nazdar",4,5]
+```
+"Zapečení" všech úprav
+
+```
+D=C.copy()
+```
+
+Pokud je například cílové pole skládáno v cyklu pomocí operace `+`, po mnoha cyklech může být indexace prvků vložených na začátku cyklu náročná na zpracování. Potom zavolání `copy()` vytvoří nové pole, ve kterém je přístup ke každému prvku opět konstantní
+
+### Vkládání prvků na začátek a na konec
+
+- **Array.push_back(x)** - vloží prvek na konec pole. Funkce vrací nové pole obsahující nový prvek.
+- **Array.push_front(x)** - vloží prvek na začátek pole. Funkce vrací nové pole obsahující nový prvek.
+- **Array.pop_back()** - Odebere poslední prvek z pole. Funkce vrací nové pole bez posledního prvku
+- **Array.pop_front()** - Odebere první prvek z pole. Funkce vrací nové pole bez prvního prvku
+- **Array.back()** - Vrací poslední prvek
+- **Array.front()** - Vrací první prvek
+
+Vkládání prvků na začátek a na konec je zvlášt optimalizováno, aby nedocházelo k zbytečným kopiim ani zřetězování operací nad polem. Proto operace vložení prvku je většinou rychlá bez ohledu na velikost pole (ale nemá konstantní složitost, protože v krajních případech se může stát, že dojde k vytvoření sloučené kopie pole, pokud je až příliž fragmentované v paměti)
+
+Pokud vkládáte fragmenty polí, je vhodné využít vlastnost funkcí **push_back** a **push_front** v možnosti vložit na konec víc současně tím, že jsou všechny nové prvky zadány jako parametry (dva parametry vloží dva prvky). Pomocí operátoru `...` lze vložit na konec jiné pole
+
+```
+A=[1,2,3]
+B=[4,5,6]
+A.push_back(B...)
+
+#Result: [1,2,3,4,5,6]
+```
+
+### Další operace
+
+* **reverse()** - převrátí pořadí pole
+* **indexOf** - najde prvek a vrací jeho index, -1 pokud nebyl nalezen
+* **find(fn)** - volá funkci na každý prvek dokud funkce vrací `false`. Pokud vrátí `true`, procházení zastaví a vrátí nalezený prvek. Pokud není nalezený žádný, vrací `null`
+* **findIndex(fn)** - jako **find** ovšem vrací index
+* **sort(fn(a,b))** - seřadí pole, dodaná funkce postupně obdrží dvojice prvků a musí vrátit nulu, pokud jsou prvky rovny, záporné číslo, pokud je a<b, kladné číslo, pokud b>a
+* **map(fn)** - provede mapování pole na jiné pole(které je vráceno). Na každý prvek zavolá funkci, předá ji 1-3 parametry `(prvek, index, celé_pole)`. Očekává se, že funkce transformuje předaný prvek na jiný prvek, který je poté vložen do nového pole. Funkce také může vrátit prázdný seznam hodnot `()`, potom je prvek pouze přeskočen, může však vrátit víc hodnot `(x,y,..)` pak jsou vloženy všechny vrácené prvky.
+* **copy()** - veškeré matematické mapování, spojování polí, ale i vkládání prvků na konec (včetně operace `map()` převede na nové pole "ploché" pole.
+
+## Matematické funkce
+
+Veškeré matematické funkce jsou v třídě `Math`. Například `Math.sin()`
+* **Math.E** - 2.718281828459045
+* **Math.LN10** - 2.302585092994046
+* **Math.LN2** - 0.6931471805599453.
+* **Math.LOG2E** - 1.4426950408889634
+* **Math.LOG10E** - 0.4342944819032518
+* **Math.PI** - 3.141592653589793
+* **Math.SQRT1_2** - 0.7071067811865476
+* **Math.SQRT2** - 1.4142135623730951
+* **Math.INF** - Nekonečno
+* **Math.EPSILON** - Nejmenší krok čísla
+* **Math.abs(x)** 
+* **Math.acos(x)**
+* **Math.acosh(x)**
+* **Math.asin(x)**
+* **Math.asinh(x)**
+* **Math.atan(x)**
+* **Math.atanh(x)**
+* **Math.atan2(y,x)**
+* **Math.cbrt(x)**
+* **Math.ceil(x)**
+* **Math.cos(x)**
+* **Math.cosh(x)**
+* **Math.exp(x)**
+* **Math.expm1(x)**
+* **Math.floor(x)**
+* **Math.hypot(x)**
+* **Math.log(x)**
+* **Math.log1p(x)**
+* **Math.log10(x)**
+* **Math.log2(x)**
+* **Math.max(x...)**
+* **Math.min(x...)**
+* **Math.pow(x,y)**
+* **Math.round(x)**
+* **Math.sign(x)**
+* **Math.sin(x)**
+* **Math.sinh(x)**
+* **Math.sqrt(x)**
+* **Math.tan(x)**
+* **Math.trunc(x)**
+* **Math.isfinite(x)** - vrací **true** pokud je dodaný argument konečné číslo
+* **Math.isNaN(x)**  - vrací **true** pokud je dodaný argument číslo (vč. nekonečno)
+* **Math.erf(x)** - spočítá gaussovu chybovou funkcu
+* **Math.erfc(x)** - spočítá doplňek gaussovy chybové funkci
+* **Math.tgamma(x)** - spočítá úplnou gamma funkci
+* **Math.lgamma(x)** - spočítá logaritmickou gamma funkci
+* **Math.expint(x)** - spočítá hodnotu exponenciálního integrálu
+* **Math.beta(x,y)** - spočítá beta
+* **Math.gcd(x,y)** - spočítá společné dělitele
+* **Math.lcm(x,y)**
+
+
+### Numerická integrace
+
+Od zadané funkce lze spočítat numerický integrál dané funkce. 
+
+```
+IFN=Math.integral(fn,d,h,a)
+```
+
+* **IFN** jméno funkce, která obrdží integral dané funkce **fn**
+* **fn** funkce (s jedním parametrem), kterou potřebujeme numericky integrovat
+* **d** dolní mez integrace
+* **h** horní mez integrace
+* **a** stupeň přesnosti, definuje počet vzorků a tedy i přesnost výpoštu integrace. Velikost integrační tabulky je **2^a**, počet načtených vzorků je **3x2^a**. Výchozí hodnota je 8, maximální hodnota je 17
+
+Hodnotu integrálu funkce v bodě X lze spočítat pomocí `IFN(x)`
+
+
+```
+i_sin=Math.integral(x=>Math.sin(x), 0, 2*Math.PI) # příprava integral pro sin v rozsahu 0-2*pi
+i_sin(3)-i_sin(2)  # výpočet integrálu funkce sin v rozsahu 2-3
+```
+
+**Poznámka** -  příprava integrálu je výpočetně náročná operace. Proto je vhodné připravit integral během překladu, pakliže funkce je známá dopředu. Překladač automaticky spočítá integral během překladu pokud se funkce odkazuje pouze na funkce ze standardního globálního scope, případně funkce definované v současném bloku před výpočtem integralu a platí pro ně stejná pravidla jako pro integrovanou funkci.l
 
