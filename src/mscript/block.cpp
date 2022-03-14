@@ -89,6 +89,7 @@ json::NamedEnum<Cmd> strCmd({
 	{Cmd::jump_false_1,"JFALSE ^1"},
 	{Cmd::jump_false_2,"JFALSE ^2"},
 	{Cmd::exit_block,"EXIT"},
+	{Cmd::is_def,"ISDEF"},
 	{Cmd::is_def_1,"ISDEF @1"},
 	{Cmd::is_def_2,"ISDEF @2"},
 	{Cmd::op_add_const_1,"ADD $1"},
@@ -206,6 +207,7 @@ bool BlockExecution::run(VirtualMachine &vm) {
 			case Cmd::push_array_1: do_push_array(vm, load_int1());break;
 			case Cmd::push_array_2: do_push_array(vm, load_int2());break;
 			case Cmd::push_array_4: do_push_array(vm, load_int4());break;
+			case Cmd::is_def: vm.push_value(vm.pop_value().defined());break;
 			case Cmd::is_def_1: do_isdef(vm, load_int1());break;
 			case Cmd::is_def_2: do_isdef(vm, load_int2());break;
 			case Cmd::op_add_const_1: bin_op_const(vm, load_int1(), op_add);break;

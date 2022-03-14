@@ -177,6 +177,9 @@ PNode Compiler::compileValue() {
 		out = compileBlock();
 		return std::make_unique<BlockValueNode>(packToValue(buildCode(out, {loc.file, loc.line+curLine})), std::move(out));
 		break;
+	case Symbol::s_questionmark:
+		commit();
+		return compileIfDefExpression();
 	case Symbol::s_exclamation:
 		commit();
 		out = std::make_unique<UnaryOperation>(compileValue(),Cmd::op_bool_not);
@@ -435,7 +438,7 @@ PNode Compiler::compileCommand() {
 			Value ident = nd.getIdent();
 			cmd = compileExpression();
 			cmd = std::make_unique<IfElseNode>(
-					std::make_unique<IsDefinedNode>(ident),
+					std::make_unique<IsDefinedNode>(std::make_unique<Identifier>(ident)),
 					std::make_unique<Identifier>(ident),
 					std::move(cmd)
 			);
@@ -887,6 +890,11 @@ PNode Compiler::compileCast(PNode &&expr, PNode &&baseObj) {
 	sync(Symbol::s_left_bracket);
 	auto params = compileValueList();
 	return std::make_unique<CastMethodCallNode>(std::move(expr), std::move(baseObj), std::move(path), std::move(params));
+}
+
+PNode Compiler::compileIfDefExpression() {
+	auto s = next();
+	return std::make_unique<IsDefinedNode>(compileValue());
 }
 
 }

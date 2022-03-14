@@ -98,6 +98,7 @@ protected:
 	Value expressionToConst();
 	PNode compileNumber();
 	PNode compileCast(PNode &&expr, PNode &&baseObj);
+	PNode compileIfDefExpression();
 
 };
 

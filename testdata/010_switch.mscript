@@ -1,4 +1,4 @@
-for (I:10) {
+for (I:0..9) {
 	print(switch I {
 		case 0,1: "Hello "
 		case 2: "world "
@@ -6,11 +6,10 @@ for (I:10) {
 		case 4: "is "
 		case 5: "fine "
 		default: "."		
-	})
-	
+	})	
 }
 printnl()
-for (I:10) {
+for (I:0..9) {
 	print(switch I {
 		case 0,1: "Hello "
 		case 2: "world "

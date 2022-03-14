@@ -289,7 +289,7 @@ switch (X) {
 
 ### Smyčka for
 
-Smyčka for prochází kontejner (pole, objekt) a provádí kód pro každý prvek. Příkaz funguje jako funkce, výsledkem je výsledek posledního výrazu bloku po provedení posledního cyklu
+Smyčka for prochází kontejner (pole, objekt) a provádí kód pro každý prvek. Příkaz napodobuje provádění cyklu rekurzí, přestože rekurzivně se fyzicky neprovádí. Pro každý cyklus jsou k dispozici proměnné deklarované v předchozím cyklu. V tomto cyklu lze proměnné deklarovat znova a využít k proměnné z předchozího cyklu. Tím dochází "virtuálně" k přepsání proměnné. Před prvním cyklu jsou proměnné nastavené podle <init> části
 
 ```
 for (<iterator>: <konteiner>, <init>)(
@@ -301,13 +301,14 @@ for (<iterator>: <konteiner>, <init>)(
 * **<kontejner>** - kontejner, který se iteruje. Může být pole, nebo také rozsah `A..B`
 * **<init>** - nepovinná část, čárkou oddělený seznam proměnných, které se inicializují před prvním cyklem. Povolen je jediný zápis a to `X=<vyraz>`
 
+Příkaz se chová jako funkce, která vrací objekt, který obsahuje proměnné z posledního průchodu.
+
 ```
-faktorial=for (i:1..N, f=1) {
+faktorial=(for (i:1..N, f=1) {
    f=f*i
-}
+}).f
 ```
 
-Proměnné uvnitř bloku mohou být přepisovány pouze jednou, jejich hodnoty se převádí do dalšího cyklu. Po skončení cyklu jsou proměnné smazány a pouze výsledek poslední operace je vrácen jako výsledek celého cyklu.
 
 ### Smyčka while
 
@@ -317,22 +318,23 @@ while (<condition>) {
 }
 ```
 
-Smyčka se provádí tak dlouho, dokud je `<condition>` splněno. Jakmile není `<condition>` splněno, smyčka se ukončí. Pokud na začátku cyklu není `<condition>` splněno, neprovede se žádný cyklus a výsledkem operace je `null`
+Smyčka se provádí tak dlouho, dokud je `<condition>` splněno. Jakmile není `<condition>` splněno, smyčka se ukončí. Pokud na začátku cyklu není `<condition>` splněno, neprovede se žádný cyklus.
 
 Výraz `<condition>` se může odkazovat na proměnné přiřazené nebo změněné ve scope uvnitř bloku. 
 
 ```
 N=10
 F=1
-faktorial=while(N>1) {
+faktorial=(while(N>1) {
    F=F*N
    N=N-1
-   F
-}
+}).F
 #Po skončení cyklu budou proměnné obsahovat toto
 #N=10, F=1, faktorial=N!
 #Pozor že proměnné F a N se mění jen uvnitř bloku
 ```
+
+Stejně jako u smyčky F, cyklus while napodobuje rekurzivní vykonávání tím, že v každém novém průchodu jsou k dispozici proměnné z předchozího průchodu a lze je tedy deklarovat znovu a tím je modifikovat. Příkaz vrací stav proměnných po vykonání posledního průchodu jako objekt. Pokud cyklus neproběhl ani jednou, výsledkem je `null`
 
 ### Deklarace funkce a bloku
 
@@ -620,7 +622,7 @@ X->Array.size()
 #Result: 2
 ```
 
-Výše uvedený příklad funguje protože objekty lze adresovat jako pole, a proto existuje možnost přetypovat objekt na pole a zavolat metodu pole
+Výše uvedený příklad funguje protože objekty lze indexovat jako pole, a proto existuje možnost přetypovat objekt na pole a zavolat metodu pole
 
 Přetypování lze použít k zavolání funkce jakoby šlo o metodu a předat ji this. Lze tedy vytvářet metody, které nejsou vázané na objekt
 

@@ -71,6 +71,7 @@ enum class Cmd:std::uint8_t{
 	pop_var_1,		    ///<pick name of variable from consts (1 byte), set variable
 	pop_var_2,		    ///<pick name of variable from consts (2 byte), set variable
 
+	is_def,
 	is_def_1,			///<pick name of varuable, put on stack result (true if defined)
 	is_def_2,			///<pick name of varuable, put on stack result (true if defined)
 

@@ -182,7 +182,7 @@ void KwExecObjectNode::generateExpression(BlockBld &blk) const {
 	nd_object->generateExpression(blk);  //<block> <object>
 	pushScope(blk);
 	ExecNode::generateExpression(blk);
-	blk.pushCmd(Cmd::del);			     //discard return value
+	BlockNode::optimizeStoreDel(blk);
 	blk.pushCmd(Cmd::scope_to_object);	 //convert scope to object <return value is object>
 	blk.pushCmd(Cmd::pop_scope);		 //pop scope
 }
@@ -190,7 +190,7 @@ void KwExecObjectNode::generateExpression(BlockBld &blk) const {
 void KwExecNewObjectNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(Cmd::push_scope);
 	ExecNode::generateExpression(blk);
-	blk.pushCmd(Cmd::del);
+	BlockNode::optimizeStoreDel(blk);
 	blk.pushCmd(Cmd::scope_to_object);
 	blk.pushCmd(Cmd::pop_scope);
 }
@@ -579,11 +579,21 @@ void WhileLoopNode::generateListVars(VarSet &vars) const {
 	ExecNode::generateListVars(vars);
 }
 
-IsDefinedNode::IsDefinedNode(Value ident):ident(ident) {
+IsDefinedNode::IsDefinedNode(PNode &&expr):expr(std::move(expr)) {
 }
 
 void IsDefinedNode::generateExpression(BlockBld &blk) const {
-	blk.pushInt(blk.pushConst(ident), Cmd::is_def_1,2);
+	auto z = dynamic_cast<const Identifier *>(expr.get());
+	if (z) {
+		blk.pushInt(blk.pushConst(z->getName()), Cmd::is_def_1,2);
+	} else {
+		expr->generateExpression(blk);
+		blk.pushCmd(Cmd::is_def);
+	}
+}
+
+void IsDefinedNode::generateListVars(VarSet &vars) const {
+	expr->generateListVars(vars);
 }
 
 BlockValueNode::BlockValueNode(Value n, PNode &&blockTree):ValueNode(n),blockTree(std::move(blockTree)) {
@@ -719,6 +729,7 @@ void BlockBld::finishJumpHere(std::size_t jmpPos, int sz) {
 }
 
 void BlockBld::finishJumpTo(std::size_t jmpPos, std::size_t targetPos, int sz) {
+	if (targetPos == code.size()) lastStorePos = 0;
 	std::intptr_t distance = targetPos;
 	distance -= jmpPos;
 	distance -= sz;

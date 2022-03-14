@@ -1,0 +1,7 @@
+baz?=3
+A=object {
+	bar=true
+	baz?=5
+}
+
+(?B,?A,?A.foo,?A.bar,A)

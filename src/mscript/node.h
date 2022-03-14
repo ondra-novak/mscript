@@ -416,12 +416,13 @@ namespace mscript {
 		Value ident;
 	};
 
-	class IsDefinedNode: public ConstantLeaf {
+	class IsDefinedNode: public Expression {
 	public:
-		IsDefinedNode(Value ident);
+		IsDefinedNode(PNode &&expr);
 		virtual void generateExpression(BlockBld &blk) const override;
+		virtual void generateListVars(VarSet &vars) const override;
 	protected:
-		Value ident;
+		PNode expr;
 	};
 
 
