@@ -82,6 +82,15 @@ protected:
 class CompileError: public VMException {
 public:
 	CompileError(const std::string &text, const CodeLocation &loc);
+
+	const CodeLocation& getLoc() const {
+		return loc;
+	}
+
+	const std::string& getText() const {
+		return text;
+	}
+
 protected:
 	virtual void what(std::string &out) const override;
 	std::string text;

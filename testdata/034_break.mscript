@@ -1,7 +1,18 @@
-A?=for (I:1..20) {
-	if (I==10) break
-	else {
-		J=I
+A=for (I:1..20) { 
+	switch (I) {
+		case 10: break
+		default: {
+				J=I
+				}
 	}
 }
-print(A)
+printnl(A)
+
+B=exec {
+	N=0
+	while(true) {
+		N=N+1
+		if (N>10) break
+	}
+}
+printnl(B)

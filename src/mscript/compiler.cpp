@@ -173,7 +173,6 @@ PNode Compiler::compileValue() {
 		if (next().symbol == Symbol::s_arrow) return compileDefineFunction(std::move(out));
 		break;
 	case Symbol::s_left_brace:
-		commit();
 		out = compileBlock();
 		return std::make_unique<BlockValueNode>(packToValue(buildCode(out, {loc.file, loc.line+curLine})), std::move(out));
 		break;
@@ -376,29 +375,40 @@ PNode Compiler::compileBlockContent() {
 		auto l = curLine;
 		if (s.symbol != Symbol::separator) {
 			PNode cmd = compileCommand();
-			Value bk = packToValue(buildCode(cmd, loc));
-			result.reset();
-			bool err = false;
-			vm.push_task(std::make_unique<CompileTimeContent>(err));
-			vm.push_task(std::make_unique<BlockExecution>(bk));
-			while (vm.run());
-			if (err) {
-				nodes.push_back(std::make_unique<InputLineMapNode>(l,std::move(cmd)));
-			} else {
-				Value variables = vm.scope_to_object();
-				bool has_res = true;
-				for (Value x: variables) {
-					auto k = x.getKey();
-					if (vars.insert(std::string(k)).second) {
-						has_res = false;
-						nodes.push_back(
-							std::make_unique<Assignment>(
-									std::make_unique<SimpleAssignNode>(k),
-									std::make_unique<ValueNode>(x)));
+			if (compilerExecTm) {
+				Value bk = packToValue(buildCode(cmd, loc, true));
+				result.reset();
+				bool err = false;
+				vm.push_task(std::make_unique<CompileTimeContent>(err));
+				vm.push_task(std::make_unique<BlockExecution>(bk));
+				auto execTm = std::chrono::system_clock::now()+std::chrono::milliseconds(compilerExecTm);
+				while (vm.run()) {
+					if (std::chrono::system_clock::now()>execTm) {
+						err = true;
+						compilerExecTm>>=1;
+						break;
 					}
 				}
-				if (has_res) result = vm.pop_value();
+				if (err) {
+					nodes.push_back(std::make_unique<InputLineMapNode>(l,std::move(cmd)));
+				} else {
+					Value variables = vm.scope_to_object();
+					bool has_res = true;
+					for (Value x: variables) {
+						auto k = x.getKey();
+						if (vars.insert(std::string(k)).second) {
+							has_res = false;
+							nodes.push_back(
+								std::make_unique<Assignment>(
+										std::make_unique<SimpleAssignNode>(k),
+										std::make_unique<ValueNode>(x)));
+						}
+					}
+					if (has_res) result = vm.pop_value();
 
+				}
+			} else {
+				nodes.push_back(std::make_unique<InputLineMapNode>(l,std::move(cmd)));
 			}
 		} else {
 			commit();
@@ -414,6 +424,7 @@ PNode Compiler::compileBlockContent() {
 }
 
 PNode Compiler::compileBlock() {
+	sync(Symbol::s_left_brace);
 	PNode ret = compileBlockContent();
 	sync(Symbol::s_right_brace);
 	return ret;
@@ -422,6 +433,10 @@ PNode Compiler::compileBlock() {
 PNode Compiler::compileCommand() {
 	auto s = next();
 	if (s.symbol == Symbol::separator) return nullptr;
+	if (s.symbol == Symbol::kw_break) {
+			commit();
+			return std::make_unique<BreakNode>();
+	}
 	auto sv=curSymbol;
 	PNode assg = tryCompileAssgn();
 	if (assg == nullptr) {
@@ -503,13 +518,7 @@ PNode Compiler::tryCompileAssgn() {
 
 
 PNode Compiler::compileExpression() {
-	auto s = next();
-	if (s.symbol == Symbol::kw_break) {
-		commit();
-		return std::make_unique<BreakNode>();
-	} else {
 		return compileTernal();
-	}
 }
 PNode Compiler::compileTernal() {
 	PNode nd1 = compileOr();
@@ -684,27 +693,27 @@ PNode Compiler::compileFor() {
 	if (iter_value == nullptr) {
 		throw compileError("Operator `for` must have an iterator 'for (iterator: container)' ");
 	}
-	checkBeginBlock(); //block follows
-	return std::make_unique<ForLoopNode>(iterator, std::move(iter_value), std::move(init), compileValue());
+
+	return std::make_unique<ForLoopNode>(iterator, std::move(iter_value), std::move(init), compileBlock());
 }
 
 PNode Compiler::compileWhile() {
 	PNode cond = compileExpression();
 	sync(Symbol::s_right_bracket);
-	checkBeginBlock(); //block follows
-	return std::make_unique<WhileLoopNode>(std::move(cond), compileValue());
+	return std::make_unique<WhileLoopNode>(std::move(cond), compileBlock());
 }
 
 PNode Compiler::compileBlockOrExpression() {
 	auto s = next();
-	PNode out;
-	if (s.symbol == Symbol::s_left_brace) {
+	switch(s.symbol) {
+	case Symbol::s_left_brace:
+		return compileBlock();
+	case Symbol::kw_break:
 		commit();
-		out = compileBlock();
-	} else {
-		out = compileExpression();
+		return std::make_unique<BreakNode>();
+	default:
+		return compileExpression();
 	}
-	return out;
 }
 
 CompileError Compiler::compileError(const std::string &text) {

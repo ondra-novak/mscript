@@ -446,12 +446,7 @@ void BlockExecution::exec_block(VirtualMachine &vm) {
 
 void BlockExecution::do_raise(VirtualMachine &vm) {
 	Value e = vm.pop_value();
-	//TODO
-	try {
-		throw e;
-	} catch (...) {
-		vm.raise(std::current_exception());
-	}
+	vm.raise(std::make_exception_ptr(CustomVMException(e)));
 }
 
 

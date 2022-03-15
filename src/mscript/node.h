@@ -13,6 +13,17 @@
 
 namespace mscript {
 
+	struct BlockBld;
+
+	class IBreakHandler {
+	public:
+
+		static void throwBreakError();
+
+		virtual void generateBreakCode(BlockBld &bld) = 0;
+		virtual ~IBreakHandler() {}
+	};
+
 	struct BlockBld {
 		std::unordered_map<Value, std::intptr_t> constMap;
 		std::vector<std::uint8_t> code;
@@ -27,20 +38,53 @@ namespace mscript {
 		void finishJumpTo(std::size_t jmpPos, std::size_t targetPos, int sz);
 		void markLine(std::size_t ln);
 
-		struct BreakInfo {
-			std::vector<std::size_t> jumps;
-		};
-
-		std::vector<BreakInfo> breaks;
-		void push_break();
-		BreakInfo pop_break();
-		bool regBreakJumpAddress(std::size_t addr);
-
-		template<typename Fn>
-		void buildBreakPart(Fn &&fn);
+		IBreakHandler *brkhndl = nullptr;
 
 
 	};
+
+	class BreakHandlerBase: public IBreakHandler {
+	public:
+		BreakHandlerBase(BlockBld &bld):bld(&bld),prevHandler(bld.brkhndl) {bld.brkhndl = this;}
+		~BreakHandlerBase() {if (bld) bld->brkhndl = prevHandler;}
+		BreakHandlerBase &operator=(const BreakHandlerBase &) = delete;
+		BreakHandlerBase(const BreakHandlerBase &) = delete;
+		BreakHandlerBase(BreakHandlerBase &&other):bld(other.bld),prevHandler(other.prevHandler) {
+			other.bld = nullptr;other.prevHandler = nullptr;
+			if (bld) bld->brkhndl=this;
+		}
+	protected:
+		BlockBld *bld;
+		IBreakHandler *prevHandler;
+	};
+
+	template<typename Fn>
+	class BreakHandler: public BreakHandlerBase {
+	public:
+		BreakHandler(BlockBld &bld, Fn &&fn):BreakHandlerBase(bld),fn(std::forward<Fn>(fn)) {}
+		BreakHandler(BreakHandler &&other):BreakHandlerBase(other),fn(std::move(fn)) {}
+		virtual void generateBreakCode(BlockBld &bld) {
+			if (fn(bld)) {
+				if (prevHandler) prevHandler->generateBreakCode(bld);
+				else throwBreakError();
+			}
+		}
+	protected:
+		Fn fn;
+	};
+
+	class DisableBreak: public BreakHandlerBase {
+	public:
+		using BreakHandlerBase::BreakHandlerBase;
+		virtual void generateBreakCode(BlockBld &) {
+			throwBreakError();
+		}
+	};
+
+	template<typename Fn>
+	auto setBreakHandler(BlockBld &bld, Fn &&fn) {
+		return BreakHandler<Fn>(bld, std::forward<Fn>(fn));
+	}
 
 
 	using VarSet = std::unordered_set<Value>;
@@ -349,7 +393,14 @@ namespace mscript {
 
 	Value defineUserFunction(std::vector<Value> &&identifiers, bool expand_last, PNode &&body, const CodeLocation &loc);
 
-	Block buildCode(const PNode &nd, const CodeLocation &loc);
+	///Build code
+	/**
+	 * @param nd node contains tree
+	 * @param loc location of the code
+	 * @param compile_time se true, if the code will be run during compile time evaluation
+	 * @return code in block
+	 */
+	Block buildCode(const PNode &nd, const CodeLocation &loc, bool compile_time = false);
 
 	class BlockNode: public Expression {
 	public:
@@ -384,23 +435,25 @@ namespace mscript {
 	};
 
 
-	class ForLoopNode: public ExecNode {
+	class ForLoopNode: public Expression {
 	public:
 		ForLoopNode(Value iterator, PNode &&container, std::vector<std::pair<Value,PNode> > &&init, PNode &&block);
 		virtual void generateExpression(BlockBld &blk) const override;
 		virtual void generateListVars(VarSet &vars) const override;
 	protected:
+		PNode block;
 		Value iterator;
 		PNode container;
 		std::vector<std::pair<Value,PNode>> init;
 	};
 
-	class WhileLoopNode: public ExecNode {
+	class WhileLoopNode: public Expression {
 	public:
 		WhileLoopNode(PNode &&condition, PNode &&block);
 		virtual void generateExpression(BlockBld &blk) const override;
 		virtual void generateListVars(VarSet &vars) const override;
 	protected:
+		PNode block;
 		PNode condition;
 	};
 

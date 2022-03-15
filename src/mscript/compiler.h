@@ -18,7 +18,7 @@ namespace mscript {
 class Compiler {
 public:
 
-	Compiler(Value globalScope):globalScope(globalScope) {}
+	Compiler(Value globalScope, std::size_t compilerExecTm=10000):globalScope(globalScope),compilerExecTm(compilerExecTm) {}
 
 	///Compile code
 	/**
@@ -52,6 +52,7 @@ protected:
 
 	std::vector<Element> code;
 	Value globalScope;
+	std::size_t compilerExecTm;
 	//BlockBld &bld;
 	CodeLocation loc;
 	int curLine = 0;

@@ -56,6 +56,7 @@ enum class Cmd:std::uint8_t{
 	scope_to_object,	///<makes object from scope and pushes it to stack
 	raise,				///<raise exception -> requires <exception>
 
+
 	push_true,			///<push true value
 	push_false,			///<push false value
 	push_null,			///<push null

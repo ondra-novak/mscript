@@ -5,33 +5,6 @@
 
 namespace mscript {
 
-void BlockBld::push_break() {
-	breaks.emplace_back();
-}
-
-BlockBld::BreakInfo BlockBld::pop_break() {
-	auto ret = breaks.back();
-	breaks.pop_back();
-	return ret;
-}
-
-bool BlockBld::regBreakJumpAddress(std::size_t addr) {
-	if (breaks.empty()) return false;
-	breaks.back().jumps.push_back(addr);
-	return true;
-}
-
-template<typename Fn> void BlockBld::buildBreakPart(Fn &&fn) {
-	auto brk = pop_break();
-	if (!brk.jumps.empty()) {
-		auto skp = prepareJump(Cmd::jump_1, 2);
-		for (const auto &x: brk.jumps) {
-			finishJumpHere(x, 2);
-		}
-		fn();
-		finishJumpHere(skp, 2);
-	}
-}
 
 BinaryOperation::BinaryOperation(PNode &&left, PNode &&right, Cmd instruction)
 	:left(std::move(left)),right(std::move(right)),instruction(instruction) {}
@@ -195,52 +168,32 @@ void KwWithNode::pushScope(BlockBld &blk) const {
 void KwWithNode::generateExpression(BlockBld &blk) const {
 	nd_object->generateExpression(blk);
 	pushScope(blk);
-	blk.push_break();
 	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::pop_scope);
-	blk.buildBreakPart([&]{
-		blk.pushCmd(Cmd::pop_scope);
-		BreakNode().generateExpression(blk);
-	});
 }
 
 
 void KwExecNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(Cmd::push_scope);
-	blk.push_break();
 	ExecNode::generateExpression(blk);
 	blk.pushCmd(Cmd::pop_scope);
-	blk.buildBreakPart([&]{
-		blk.pushCmd(Cmd::pop_scope);
-		BreakNode().generateExpression(blk);
-	});
 }
 
 void KwExecObjectNode::generateExpression(BlockBld &blk) const {
 	nd_object->generateExpression(blk);  //<block> <object>
 	pushScope(blk);
-	blk.push_break();
 	ExecNode::generateExpression(blk);
 	BlockNode::optimizeStoreDel(blk);
 	blk.pushCmd(Cmd::scope_to_object);	 //convert scope to object <return value is object>
 	blk.pushCmd(Cmd::pop_scope);		 //pop scope
-	blk.buildBreakPart([&]{
-		blk.pushCmd(Cmd::pop_scope);
-		BreakNode().generateExpression(blk);
-	});
 }
 
 void KwExecNewObjectNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(Cmd::push_scope);
-	blk.push_break();
 	ExecNode::generateExpression(blk);
 	BlockNode::optimizeStoreDel(blk);
 	blk.pushCmd(Cmd::scope_to_object);
 	blk.pushCmd(Cmd::pop_scope);
-	blk.buildBreakPart([&]{
-		blk.pushCmd(Cmd::pop_scope);
-		BreakNode().generateExpression(blk);
-	});
 }
 
 IfElseNode::IfElseNode(PNode &&cond, PNode &&nd_then, PNode &&nd_else)
@@ -388,8 +341,20 @@ Value defineUserFunction(std::vector<Value> &&identifiers, bool expand_last, PNo
 	return packToValue(std::unique_ptr<AbstractFunction>(std::move(ptr)), name);
 }
 
-Block buildCode(const PNode &nd, const CodeLocation &loc) {
+class FakeBreakHandler: public IBreakHandler {
+public:
+	virtual void generateBreakCode(BlockBld &blk) {
+		blk.pushCmd(Cmd::push_false);
+		blk.pushCmd(Cmd::raise); //generate exception, so block cannot be evaluated when compile time
+	}
+};
+
+Block buildCode(const PNode &nd, const CodeLocation &loc, bool compile_time) {
 	BlockBld bld;
+	FakeBreakHandler fkbrk;
+	if (compile_time) {
+		bld.brkhndl = &fkbrk;
+	}
 	nd->generateExpression(bld);
 	std::vector<Value> consts;
 	consts.resize(bld.constMap.size());
@@ -459,7 +424,7 @@ void BooleanAndOrNode::generateExpression(BlockBld &blk) const {
 }
 
 ForLoopNode::ForLoopNode(Value iterator, PNode &&container, std::vector<std::pair<Value,PNode> > &&init, PNode &&block)
-:ExecNode(std::move(block))
+:block(std::move(block))
 ,iterator(iterator)
 ,container(std::move(container))
 ,init(std::move(init))
@@ -482,7 +447,17 @@ void ForLoopNode::generateExpression(BlockBld &blk) const {
 	}
 	// <scope>
 	container->generateExpression(blk);
-	blk.push_break();
+	std::vector<std::size_t> regjumps;
+	auto brkh = setBreakHandler(blk, [&](BlockBld &blk){
+		blk.pushCmd(Cmd::del);			//<scope><container>
+		blk.pushCmd(Cmd::del);			//<scope>
+		blk.pushCmd(Cmd::del);			//
+		blk.pushCmd(Cmd::scope_to_object);	//<scope><container><idx><scope>
+		blk.pushCmd(Cmd::pop_scope);
+		regjumps.push_back(blk.prepareJump(Cmd::jump_1, 2));
+		return false;
+	});
+
 	// <scope><container>
 	blk.pushCmd(Cmd::push_zero_int);
 	// <scope><container><idx>
@@ -497,7 +472,7 @@ void ForLoopNode::generateExpression(BlockBld &blk) const {
 	blk.pushInt(1, Cmd::dup_1, 1);	//<scope><container><idx><container><idx>
 	blk.pushCmd(Cmd::deref);		//<scope><container><idx><value>
 	blk.pushInt(blk.pushConst(iterator), Cmd::pop_var_1, 2); //<scope><container><idx>
-	ExecNode::generateExpression(blk);	//generate block execution <scope><container><idx><ret>
+	block->generateExpression(blk);	//generate block execution <scope><container><idx><ret>
 	BlockNode::optimizeStoreDel(blk);	//<scope><container><idx> - return value is ignored
 	blk.pushCmd(Cmd::scope_to_object);	//<scope><container><idx><scope>
 	blk.pushCmd(Cmd::pop_scope);
@@ -508,43 +483,40 @@ void ForLoopNode::generateExpression(BlockBld &blk) const {
 	blk.finishJumpHere(jpout, 2);	//<scope><container><idx>
 	blk.pushCmd(Cmd::del);			//<scope><container>
 	blk.pushCmd(Cmd::del);			//<scope>
-	blk.buildBreakPart([&]{
-		blk.pushCmd(Cmd::del);			//<scope><container>
-		blk.pushCmd(Cmd::del);			//<scope>
-		blk.pushCmd(Cmd::del);			//
-		blk.pushCmd(Cmd::scope_to_object);	//<scope><container><idx><scope>
-		blk.pushCmd(Cmd::pop_scope);
-	});
+	for (const auto &x: regjumps) {
+		blk.finishJumpHere(x, 2);
+	}
 
 
 }
 
-WhileLoopNode::WhileLoopNode(PNode &&condition, PNode &&block):ExecNode(std::move(block)),condition(std::move(condition)) {
+WhileLoopNode::WhileLoopNode(PNode &&condition, PNode &&block):block(std::move(block)),condition(std::move(condition)) {
 }
 
 void WhileLoopNode::generateExpression(BlockBld &blk) const {
 	blk.pushCmd(Cmd::push_null);		//<scope>
-	blk.push_break();
+	DisableBreak _(blk);
 	condition->generateExpression(blk); //<condition>
 	auto skp = blk.prepareJump(Cmd::jump_false_1, 2);
 	auto rephere = blk.code.size();
 	blk.pushCmd(Cmd::push_scope_object);	//
-	blk.push_break();
-	ExecNode::generateExpression(blk);		//<retval>
+	std::vector<std::size_t> brkjmps;
+	auto brkhndl = setBreakHandler(blk, [&](BlockBld &blk){
+		blk.pushCmd(Cmd::scope_to_object);		//<scope>
+		blk.pushCmd(Cmd::pop_scope);
+		brkjmps.push_back(blk.prepareJump(Cmd::jump_1, 2));
+		return false;
+	});
+	block->generateExpression(blk);		//<retval>
 	BlockNode::optimizeStoreDel(blk);		//
 	blk.pushCmd(Cmd::scope_to_object);		//<scope>
 	condition->generateExpression(blk);		//<scope> <condition>
 	blk.pushCmd(Cmd::pop_scope);
 	blk.finishJumpTo(blk.prepareJump(Cmd::jump_true_1, 2), rephere, 2); //<scope>
 	blk.finishJumpHere(skp, 2);
-	blk.buildBreakPart([&]{
-		blk.pushCmd(Cmd::scope_to_object);		//<scope>
-		blk.pushCmd(Cmd::pop_scope);
-	});
-	blk.buildBreakPart([&]{
-		blk.pushCmd(Cmd::del);
-	});
-
+	for (const auto &x: brkjmps) {
+		blk.finishJumpHere(x, 2);
+	}
 }
 
 
@@ -637,13 +609,13 @@ void BooleanAndOrNode::generateListVars(VarSet &vars) const {
 
 void ForLoopNode::generateListVars(VarSet &vars) const {
 	container->generateListVars(vars);
-	ExecNode::generateListVars(vars);
+	block->generateListVars(vars);
 	for (const auto &x: init) x.second->generateListVars(vars);
 }
 
 void WhileLoopNode::generateListVars(VarSet &vars) const {
 	condition->generateListVars(vars);
-	ExecNode::generateListVars(vars);
+	block->generateListVars(vars);
 }
 
 IsDefinedNode::IsDefinedNode(PNode &&expr):expr(std::move(expr)) {
@@ -739,7 +711,6 @@ SwitchCaseNode::SwitchCaseNode(PNode &&selector, Labels &&labels, Nodes &&nodes,
 	:selector(std::move(selector)), labels(std::move(labels)),nodes(std::move(nodes)),defNode(std::move(defaultNode)) {}
 
 void SwitchCaseNode::generateExpression(BlockBld &blk) const {
-	blk.push_break();
 	selector->generateExpression(blk);
 	std::vector<std::size_t> lbofs;
 	std::vector<std::size_t> begins;
@@ -767,9 +738,6 @@ void SwitchCaseNode::generateExpression(BlockBld &blk) const {
 		blk.finishJumpTo(lbofs[i], begins[l.second], 2);
 		i++;
 	}
-	blk.buildBreakPart([&]{
-		throw BuildError("Command 'break' is not allowed inside of 'switch'");
-	});
 
 }
 
@@ -930,10 +898,15 @@ void IsDefDoubleQuoteNode::generateListVars(VarSet &vars) const {
 }
 
 void BreakNode::generateExpression(BlockBld &blk) const {
-	auto out = blk.prepareJump(Cmd::jump_1, 2);
-	if (!blk.regBreakJumpAddress(out)) {
-		blk.code.resize(blk.code.size()-3);
+	if (blk.brkhndl) {
+		blk.brkhndl->generateBreakCode(blk);
+	} else {
+		IBreakHandler::throwBreakError();
 	}
+}
+
+void IBreakHandler::throwBreakError() {
+	throw BuildError("The 'break' command is not expected in this block");
 }
 
 }

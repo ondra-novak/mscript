@@ -21,14 +21,16 @@ enum class Action {
 	parse,
 	showcode,
 	run,
-	debug
+	debug,
+	console
 };
 
 json::NamedEnum<Action> strAction({
 	{Action::parse,"parse"},
 	{Action::showcode,"showcode"},
 	{Action::run,"run"},
-	{Action::debug,"debug"}
+	{Action::debug,"debug"},
+	{Action::console,"console"}
 });
 
 using mscript::getVirtualMachineRuntime;
@@ -113,7 +115,7 @@ static int showcode(CmdArgIter &iter) {
 
 	Value global = getVirtualMachineRuntime();
 
-	Compiler cmp(global);
+	Compiler cmp(global,0);
 	auto code = cmp.compileText({"input",1}, [&](){	return fin.get();});
 
 	auto block = getBlockFromValue(code);
@@ -124,19 +126,8 @@ static int showcode(CmdArgIter &iter) {
 }
 
 
-static int run(CmdArgIter &iter, bool debug) {
-
+static void setConsoleFunctions(mscript::Value &global) {
 	using namespace mscript;
-
-	std::ifstream fin;
-	int e = openFile(iter, fin);
-	if (e) return e;
-
-	Value global = getVirtualMachineRuntime();
-
-	Compiler cmp(global);
-	Value block = cmp.compileText({"input",1}, [&](){return fin.get();});
-
 	global.setItems({
 		{"print",defineSimpleFn([](const ValueList &ppack)->Value{
 			for (Value v:ppack) {
@@ -152,6 +143,22 @@ static int run(CmdArgIter &iter, bool debug) {
 			return nullptr;
 		})}
 	});
+}
+
+static int run(CmdArgIter &iter, bool debug) {
+
+	using namespace mscript;
+
+	std::ifstream fin;
+	int e = openFile(iter, fin);
+	if (e) return e;
+
+	Value global = getVirtualMachineRuntime();
+
+	Compiler cmp(global);
+	Value block = cmp.compileText({"input",1}, [&](){return fin.get();});
+
+	setConsoleFunctions(global);
 
 	VirtualMachine vm;
 	vm.setGlobalScope(global);
@@ -254,6 +261,75 @@ static int run(CmdArgIter &iter, bool debug) {
 
 }
 
+
+static int console() {
+	using namespace mscript;
+	Value global = getVirtualMachineRuntime();
+	Compiler cmp(global,0);
+	VirtualMachine vm;
+	setConsoleFunctions(global);
+	vm.setGlobalScope(global);
+
+	std::cerr << "Ready (^C exit, !-reset, @-show variables)" << std::endl;
+
+	std::string line;
+	std::string buffer;
+	std::size_t lines;
+	Value savedVars = json::object;
+	do {
+		if (buffer.empty()) lines = 1; else lines++;
+		std::cerr << (buffer.empty()?"mscript$ ":"...> ");
+		std::cerr.flush();
+		std::getline(std::cin, line);
+		if (line=="reset" || line == "!") {
+			vm.reset();
+			savedVars = json::object;
+			std::cerr << "Virtual machine has been reset" << std::endl << std::endl;
+			buffer.clear();
+			continue;
+		}
+		if (line == "@") {
+			printValue(savedVars);
+			std::cout << std::endl;
+			continue;
+		}
+		line.push_back('\n');
+		buffer.append(line);
+		Value blk;
+		try {
+			blk = cmp.compileString({"", 1}, buffer);
+		} catch (const CompileError &e) {
+			if (e.getLoc().line >lines) {
+				continue;
+			}
+			std::cerr << "Compile Error: " << (static_cast<const std::exception &>(e).what()) << std::endl;
+			buffer.clear();
+			continue;
+		} catch (const std::exception &e) {
+			std::cerr << "Compile Error: " << e.what() << std::endl;
+			buffer.clear();
+			continue;
+		}
+
+		try {
+			vm.push_scope(savedVars);
+			vm.push_task(std::make_unique<BlockExecution>(blk));
+			Value res = vm.exec();
+			savedVars = vm.scope_to_object();
+			vm.pop_scope();
+			std::cout << "# Result: ";
+			printValue(res);
+			std::cout << std::endl<< std::endl;;
+		} catch (const std::exception &e) {
+			std::cerr << "! Exception: " << e.what() << std::endl<< std::endl;
+		}
+		buffer.clear();
+
+	} while (!std::cin.eof());
+
+	return 1;
+}
+
 int main(int argc, char **argv) {
 
 
@@ -280,6 +356,7 @@ int main(int argc, char **argv) {
 			case Action::showcode: return showcode(argiter);
 			case Action::run: return run(argiter, false);
 			case Action::debug: return run(argiter, true);
+			case Action::console: return console();
 		}
 
 	} catch(const std::exception &e) {
