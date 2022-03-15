@@ -670,12 +670,12 @@ OpAddNode::OpAddNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move
 
 void OpAddNode::generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const {
 	right->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_add_const_1,2);
+	blk.pushInt(n, Cmd::op_add_const_1,8);
 }
 
 void OpAddNode::generateExpression(BlockBld &blk, const PNode &left, std::int64_t n) const {
 	left->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_add_const_1,2);
+	blk.pushInt(n, Cmd::op_add_const_1,8);
 }
 
 OpSubNode::OpSubNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move(left),std::move(right), Cmd::op_sub) {
@@ -683,13 +683,13 @@ OpSubNode::OpSubNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move
 
 void OpSubNode::generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const {
 	right->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_negadd_const_1,2);
+	blk.pushInt(n, Cmd::op_negadd_const_1,8);
 
 }
 
 void OpSubNode::generateExpression(BlockBld &blk, const PNode &left, std::int64_t n) const {
 	left->generateExpression(blk);
-	blk.pushInt(-n, Cmd::op_add_const_1,2);
+	blk.pushInt(-n, Cmd::op_add_const_1,8);
 }
 
 OpMultNode::OpMultNode(PNode &&left, PNode &&right):BinaryConstOperation(std::move(left),std::move(right), Cmd::op_mult) {
@@ -697,13 +697,13 @@ OpMultNode::OpMultNode(PNode &&left, PNode &&right):BinaryConstOperation(std::mo
 
 void OpMultNode::generateExpression(BlockBld &blk, std::int64_t n, const PNode &right) const {
 	right->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_mult_const_1,2);
+	blk.pushInt(n, Cmd::op_mult_const_1,8);
 
 }
 
 void OpMultNode::generateExpression(BlockBld &blk, const PNode &left, std::int64_t n) const {
 	left->generateExpression(blk);
-	blk.pushInt(n, Cmd::op_mult_const_1,2);
+	blk.pushInt(n, Cmd::op_mult_const_1,8);
 
 }
 

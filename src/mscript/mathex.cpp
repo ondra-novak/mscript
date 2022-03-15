@@ -21,7 +21,7 @@ void mathIntegralGetPoints(VirtualMachine &vm, std::size_t pts, double a, double
 		}
 
 		virtual bool init(VirtualMachine &vm) {
-			double x = (b-a)*y.size()/(pts-1);
+			double x = a+(b-a)*y.size()/(pts-1);
 			vm.call_function(fnval, Value(), x);
 			return true;
 		}

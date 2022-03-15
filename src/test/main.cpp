@@ -289,7 +289,11 @@ static int console() {
 			continue;
 		}
 		if (line == "@") {
-			printValue(savedVars);
+			for (Value x: savedVars) {
+				std::cout << x.getKey() << "=";
+				printValue(x);
+				std::cout << std::endl;
+			}
 			std::cout << std::endl;
 			continue;
 		}
