@@ -274,7 +274,7 @@ static int console() {
 
 	std::string line;
 	std::string buffer;
-	std::size_t lines;
+	std::size_t lines = 0;
 	Value savedVars = json::object;
 	do {
 		if (buffer.empty()) lines = 1; else lines++;
