@@ -54,7 +54,7 @@ public:
 			}
 		}
 		if (idx >= sz) {
-			if (findIndex) vm.push_value(-1);else vm.push_value(nullptr);
+			vm.push_value(Value());
 			return false;
 		}
 		asyncDeref(vm, obj, idx, [this](VirtualMachine &vm, Value v){
@@ -135,7 +135,13 @@ public:
 	}
 	virtual bool run(VirtualMachine &vm) override {
 		Value cmpRes =vm.pop_value();
-		res = cmpRes.getInt();
+		if (cmpRes.flags() & (json::numberInteger || json::numberUnsignedInteger)) {
+			auto x = cmpRes.getIntLong();
+			res = x<0?-1:x>0?1:0;
+		} else {
+			double x = cmpRes.getNumber();
+			res = x==0?0:std::signbit(x)?-1:1;
+		}
 		return init(vm);
 	}
 
@@ -263,7 +269,10 @@ static Value rt = json::Object {
 			return obj.size();
 		})},
 		{"reverse",defineSimpleMethod([](Value obj, ValueList params){return json::Value(obj).reverse();})},
-		{"indexOf",defineSimpleMethod([](Value obj, ValueList params){return json::Value(obj).indexOf(params[0], params[1].getUInt());})},
+		{"indexOf",defineSimpleMethod([](Value obj, ValueList params){
+			auto z = obj.indexOf(params[0], params[1].getUInt());
+			return z == Value::npos?Value():Value(z);
+		})},
 		{"find", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){vm.push_task(std::make_unique<ArrayFindTask<false> >(obj,params[0]));})},
 		{"findIndex", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){vm.push_task(std::make_unique<ArrayFindTask<true> >(obj,params[0]));})},
 		{"sort", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){
@@ -315,6 +324,21 @@ static Value rt = json::Object {
 		})},
 	}},
 	{"String",json::Object {
+		{"substr",defineSimpleMethod([](const Value &obj, const ValueList &params){
+			if (params.size() == 1) return obj.toString().substr(params[0].getInt());
+			else return obj.toString().substr(params[0].getInt(),params[1].getInt());
+		})},
+		{"length",defineSimpleMethod([](const Value &obj, const ValueList &){
+			return obj.getString().size();
+		})},
+		{"size",defineSimpleMethod([](const Value &obj, const ValueList &){
+			return obj.getString().size();
+		})},
+		{"indexOf",defineSimpleMethod([](const Value &obj, const ValueList &params){
+			auto x = obj.toString().indexOf(params[0].getString());
+			if (x == std::string_view::npos) return Value();
+			else return Value(x);
+		})},
 
 	}},
 	{"__operator",json::Object{
