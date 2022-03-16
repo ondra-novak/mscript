@@ -5,19 +5,21 @@
  *      Author: ondra
  */
 
-#include <imtjson/array.h>
 #include <cmath>
-#include <random>
+#include <cstring>
+#include <imtjson/array.h>
 #include <imtjson/object.h>
+#include <imtjson/string.h>
 #include <imtjson/operations.h>
-#include <mscript/arrbld.h>
-#include <mscript/procarr.h>
+#include "arrbld.h"
+#include "procarr.h"
 #include "vm.h"
 #include "block.h"
 #include "function.h"
 #include "vm_rt.h"
 #include "generator.h"
 #include "mathex.h"
+#include <random>
 
 using mscript::VirtualMachine;
 
@@ -222,10 +224,11 @@ static Value rt = json::Object {
 			for (Value a: params) {auto x = a.getNumber(); v = x<v?x:v;}
 			return v;})},
 		{"pow",defineSimpleFn([](ValueList params){return std::pow(params[0].getNumber(),params[1].getNumber());})},
-		{"random",defineSimpleFn([](ValueList params){
-				std::random_device rnd;
-				std::uniform_real_distribution<double> urd(0,1);
-				return urd(rnd);})},
+		{"random",defineAsyncFunction([](VirtualMachine &vm, ValueList params){
+			if (vm.isComileTime()) vm.raise(std::make_exception_ptr(std::runtime_error("compile time")));
+			std::random_device rnd;
+			std::uniform_real_distribution<double> urd(0,1);
+			vm.push_value(urd(rnd));})},
 		{"round",defineSimpleFn([](ValueList params){return std::round(params[0].getNumber());})},
 		{"sign",defineSimpleFn([](ValueList params){
 			double n = params[0].getNumber();
@@ -243,9 +246,10 @@ static Value rt = json::Object {
 		{"lgamma",defineSimpleFn([](ValueList params){return std::lgamma(params[0].getNumber());})},
 		{"expint",defineSimpleFn([](ValueList params){return std::expint(params[0].getNumber());})},
 		{"beta",defineSimpleFn([](ValueList params){return std::beta(params[0].getNumber(),params[1].getNumber());})},
-		{"gcd",defineSimpleFn([](ValueList params){return std::gcd(params[0].getInt(),params[1].getInt());})},
-		{"lcm",defineSimpleFn([](ValueList params){return std::lcm(params[0].getInt(),params[1].getInt());})},
+/*		{"gcd",defineSimpleFn([](ValueList params){return std::gcd(params[0].getInt(),params[1].getInt());})},
+		{"lcm",defineSimpleFn([](ValueList params){return std::lcm(params[0].getInt(),params[1].getInt());})},*/
 		{"integral",defineAsyncFunction(mathIntegral)},
+		{"root",defineAsyncFunction(mathRoot)},
 
 	}},
 	{"Array",json::Object {
@@ -258,8 +262,8 @@ static Value rt = json::Object {
 		{"size",defineSimpleMethod([](Value obj, ValueList params){
 			return obj.size();
 		})},
-		{"reverse",defineSimpleMethod([](Value obj, ValueList params){return obj.reverse();})},
-		{"indexOf",defineSimpleMethod([](Value obj, ValueList params){return obj.indexOf(params[0], params[1].getUInt());})},
+		{"reverse",defineSimpleMethod([](Value obj, ValueList params){return json::Value(obj).reverse();})},
+		{"indexOf",defineSimpleMethod([](Value obj, ValueList params){return json::Value(obj).indexOf(params[0], params[1].getUInt());})},
 		{"find", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){vm.push_task(std::make_unique<ArrayFindTask<false> >(obj,params[0]));})},
 		{"findIndex", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){vm.push_task(std::make_unique<ArrayFindTask<true> >(obj,params[0]));})},
 		{"sort", defineAsyncMethod([](VirtualMachine &vm, Value obj, ValueList params){
@@ -273,6 +277,42 @@ static Value rt = json::Object {
 			if (obj.empty()) vm.push_value(obj);
 			else vm.push_task(std::make_unique<ArrayMap>(obj,params[0]));
 		})}
+	}},
+	{"Number",json::Object{
+		{"EPSILON",std::numeric_limits<double>::epsilon()},
+		{"MAX_SAFE_INTEGER",std::numeric_limits<json::Int>::max()},
+		{"MAX_VALUE",std::numeric_limits<double>::max()},
+		{"MIN_SAFE_INTEGER",std::numeric_limits<json::Int>::min()},
+		{"MIN_VALUE",std::numeric_limits<double>::min()},
+		{"NEGATIVE_INFINITY",-std::numeric_limits<double>::infinity()},
+		{"POSITIVE_INFINITY",+std::numeric_limits<double>::infinity()},
+		{"POSITIVE_INFINITY",+std::numeric_limits<double>::infinity()},
+		{"isFinite",defineSimpleMethod([](const Value &obj, const ValueList &){return std::isfinite(obj.getNumber());})},
+		{"isNaN",defineSimpleMethod([](const Value &obj, const ValueList &){return std::isnan(obj.getNumber());})},
+		{"isInteger",defineSimpleMethod([](const Value &obj, const ValueList &){return obj.flags() & (json::numberInteger || json::numberUnsignedInteger);})},
+		{"toExponential",defineSimpleMethod([](const Value &obj, const ValueList &param){
+			int n = std::min<json::Int>(100,param[0].getValueOrDefault(json::UInt(8)));
+			char buff[200];
+			std::snprintf(buff,sizeof(buff),"%.*E",n,obj.getNumber());
+			return Value(buff);
+		})},
+		{"toFixed",defineSimpleMethod([](const Value &obj, const ValueList &param){
+			int n = std::min<json::Int>(100,param[0].getValueOrDefault(json::UInt(8)));
+			char buff[200];
+			std::snprintf(buff,sizeof(buff),"%.*f",n,obj.getNumber());
+			return Value(buff);
+		})},
+		{"toPrecision",defineSimpleMethod([](const Value &obj, const ValueList &param){
+			int n = std::min<json::Int>(100,param[0].getValueOrDefault(json::UInt(8)));
+			char buff[200];
+			std::snprintf(buff,sizeof(buff),"%.*g",n,obj.getNumber());
+			return Value(buff);
+		})},
+		{"toHex",defineSimpleMethod([](const Value &obj, const ValueList &){
+			char buff[200];
+			std::snprintf(buff,sizeof(buff),"%lX",obj.getUInt());
+			return Value(buff);
+		})},
 	}},
 	{"String",json::Object {
 
@@ -294,7 +334,11 @@ static Value rt = json::Object {
 	})},
 	{"typeof",defineSimpleFn([](ValueList params){return getTypeClass(params[0]);})},
 	{"keyof",defineSimpleFn([](ValueList params){return params[0].getKey();})},
+	{"get_key",defineSimpleMethod([](Value obj, ValueList params){return obj.getKey();})},
 	{"strip_key",defineSimpleFn([](ValueList params){return params[0].stripKey();})},
+	{"to_string()",defineSimpleMethod([](Value obj, ValueList params){
+		if (params.empty()) return obj.toString();
+		return params[0].toString();})},
 
 
 
@@ -304,15 +348,5 @@ return rt;
 
 }
 
-/*
-
-inline bool MapTask::init(VirtualMachine &vm) {
-	fn = vm.pop_value();
-
-}
-
-inline bool MapTask::run(VirtualMachine &vm) {
-}
-*/
 
 }

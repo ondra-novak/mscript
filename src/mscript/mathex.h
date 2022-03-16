@@ -14,6 +14,7 @@
 namespace mscript {
 
 void mathIntegral(VirtualMachine &vm, ValueList params);
+void mathRoot(VirtualMachine &vm, ValueList params);
 }
 
 
